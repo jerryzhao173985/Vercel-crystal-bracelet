@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import BraceletCanvas from './components/BraceletCanvas';
 import ElementHistogram from './components/ElementHistogram';
+import ReactMarkdown from 'react-markdown';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
@@ -127,10 +128,12 @@ function App() {
         </div>
         {/* Display analysis and histogram */}
         {analysis && (
-          <div style={{ background: '#fff', padding: 20, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', maxWidth: 600, margin: '24px auto', textAlign: 'left' }}>
-            <h3>命理分析结果</h3>
-            <p style={{ whiteSpace: 'pre-wrap' }}>{analysis}</p>
-            {ratios && <ElementHistogram data={ratios} />}
+          <div style={{ background: '#fff', padding: 20, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', maxWidth: 600, margin: '24px auto' }}>
+            <h3 style={{ marginTop: 0, textAlign: 'center' }}>命理分析结果</h3>
+            <div className="markdown-body" style={{ textAlign: 'left', maxHeight: 300, overflowY: 'auto', marginBottom: 16 }}>
+              <ReactMarkdown>{analysis}</ReactMarkdown>
+            </div>
+            {ratios && <ElementHistogram current={ratios.current} goal={ratios.goal} />}
           </div>
         )}
       </div>
