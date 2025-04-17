@@ -54,29 +54,40 @@ module.exports = async (req, res) => {
     res.status(500).json({ error: 'DeepSeek API error', details: err.message });
     return;
   }
-  // Use OpenAI to parse JSON for five-element ratios
+  // Use OpenAI Structured Response API to extract JSON for five-element ratios
   let ratios;
   try {
-    const oaRes = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${openaiKey}`
-      },
-      body: JSON.stringify({
-        model: 'gpt-4.1',
-        messages: [
-          { role: 'system', content: '你是一个JSON解析器，只输出包含金、木、水、火、土的百分比对象，不要额外文字。' },
-          { role: 'user', content: `请从以下内容中抽取五行比例并以纯JSON输出：\n\n${analysisText}` }
-        ],
-        temperature: 0
-      })
+    const oaClient = new OpenAI({ apiKey: openaiKey });
+    const oaRes = await oaClient.responses.create({
+      model: 'gpt-4.1',
+      input: [
+        { role: 'system', content: '你是一个JSON解析器，只输出包含金、木、水、火、土的百分比对象，不要额外文字。' },
+        { role: 'user', content: `请从以下内容中抽取五行比例并以纯JSON输出：\n\n${analysisText}` }
+      ],
+      text: {
+        format: {
+          type: 'json_schema',
+          name: 'five_element_ratios',
+          schema: {
+            type: 'object',
+            properties: {
+              metal:  { type: 'number' },
+              wood:   { type: 'number' },
+              water:  { type: 'number' },
+              fire:   { type: 'number' },
+              earth:  { type: 'number' }
+            },
+            required: ['metal','wood','water','fire','earth'],
+            additionalProperties: false
+          }
+        }
+      }
     });
-    const oaData = await oaRes.json();
-    const text = oaData.choices?.[0]?.message?.content || '';
+    // The structured output is returned in output_text
+    const text = oaRes.output_text;
     ratios = JSON.parse(text);
   } catch (err) {
-    res.status(500).json({ error: 'OpenAI API error or JSON parsing error', details: err.message });
+    res.status(500).json({ error: 'OpenAI Structured Response API error or JSON parsing error', details: err.message });
     return;
   }
   // Return both full analysis text and structured ratios
