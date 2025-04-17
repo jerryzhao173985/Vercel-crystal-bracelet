@@ -206,6 +206,8 @@ This guide captures all the steps, changes, and rationale needed to smoothly dep
 
 ---
 ## Troubleshooting & Deployment Log
+- **DeepSeek prompt enhancement**
+  - Added explicit instruction in `api/astro.js` to output a Markdown table under section “3. 五行比例”，包含列 “五行 | 原局比例 | 调节目标”，确保解析器能提取到原局（current）和调节目标（goal）两组数值。
 Below is a chronological log of issues encountered during Vercel integration and how they were resolved:
 
 - **Lockfile mismatch & `npm ci` errors**

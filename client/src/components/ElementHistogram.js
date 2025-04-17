@@ -22,57 +22,37 @@ function ElementHistogram({ current, goal }) {
             <span style={{ width: 80, textTransform: 'capitalize', fontWeight: 600, marginRight: 12 }}>
               {key}
             </span>
-            <div style={{ position: 'relative', flex: 1, background: '#eee', height: 16, borderRadius: 8, overflow: 'hidden' }}>
-              {/* Percentage labels */}
-              <span
-                style={{
-                  position: 'absolute',
-                  top: '-20px',
-                  left: curr > 0 ? `${curr}%` : '0',
-                  transform: 'translateX(-50%)',
-                  fontSize: 12,
-                  color: '#333'
-                }}
-              >
-                {curr}%
-              </span>
-              <span
-                style={{
-                  position: 'absolute',
-                  top: '-20px',
-                  left: `${go}%`,
-                  transform: 'translateX(-50%)',
-                  fontSize: 12,
-                  color: '#000',
-                  fontWeight: 600
-                }}
-              >
-                {go}%
-              </span>
-              {/* Current bar: lighter color */}
+            <div style={{ position: 'relative', flex: 1, height: 16, marginRight: 12 }}>
+              {/* Current bar background */}
               <div
                 style={{
-                  width: curr > 0 ? `${curr}%` : '2px',
+                  width: `${curr}%`,
                   height: '100%',
-                  background: color,
-                  opacity: 0.6,
+                  background: '#ccc',
+                  borderRadius: 8,
                   transition: 'width 0.3s ease'
                 }}
               />
-              {/* Goal bar: full color overlay */}
+              {/* Goal marker line */}
               <div
                 style={{
                   position: 'absolute',
                   top: 0,
-                  left: 0,
-                  width: `${go}%`,
+                  left: `${go}%`,
+                  transform: 'translateX(-50%)',
+                  width: 2,
                   height: '100%',
-                  background: color,
-                  opacity: 1,
-                  transition: 'width 0.3s ease'
+                  background: color
                 }}
               />
             </div>
+            {/* Percentage labels */}
+            <span style={{ width: 40, textAlign: 'right', fontSize: 12, color: '#333', marginRight: 8 }}>
+              {curr}%
+            </span>
+            <span style={{ width: 40, textAlign: 'right', fontSize: 12, fontWeight: 600, color: color }}>
+              {go}%
+            </span>
           </div>
         );
       })}
