@@ -1,8 +1,5 @@
 import React from 'react';
-
-// Color mapping for five elements
 // Histogram showing current vs goal percentages for five elements
-import React from 'react';
 
 const ELEMENT_COLORS = {
   metal: '#FFD700',  // 金: gold
@@ -58,7 +55,5 @@ function ElementHistogram({ current, goal }) {
     </div>
   );
 }
-
-export default ElementHistogram;
 
 export default ElementHistogram;
