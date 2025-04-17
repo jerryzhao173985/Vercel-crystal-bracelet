@@ -112,3 +112,7 @@ module.exports = async (req, res) => {
   // Return both full analysis text and structured ratios
   res.status(200).json({ analysis: analysisText, ratios });
 };
+// Configure Vercel function max execution duration (in seconds)
+module.exports.config = {
+  maxDuration: 60
+};
