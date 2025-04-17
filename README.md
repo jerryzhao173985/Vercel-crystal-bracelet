@@ -203,3 +203,37 @@ vercel dev
 ---
 
 This guide captures all the steps, changes, and rationale needed to smoothly deploy your Node.js + React application to Vercel.
+
+---
+## Troubleshooting & Deployment Log
+Below is a chronological log of issues encountered during Vercel integration and how they were resolved:
+
+- **Lockfile mismatch & `npm ci` errors**
+  - Error: Missing micromark‑factory‑* and related packages when running `npm ci` in `client/`.
+  - Cause: `react-markdown` dependency tree changed; strict lockfile enforcement by `npm ci` caused failures.
+  - Fix: Switched Vercel build to use `npm install` instead of `npm ci` (configured via `installCommand` in `vercel.json` and updated `vercel-build` script).
+
+- **`functions` vs `builds` config conflict**
+  - Error: "The `functions` property cannot be used in conjunction with the `builds` property." deploy error.
+  - Fix: Removed top‑level `functions` block in `vercel.json` and set per‑function `maxDuration` via `module.exports.config` in `api/astro.js`.
+
+- **Duplicate import in `ElementHistogram.js`**
+  - Error: ESLint syntax error "Identifier 'React' has already been declared." during React build.
+  - Fix: Removed duplicate `import React` and redundant `export default` lines.
+
+- **Histogram readability & interactivity**
+  - Issue: Original dual‑bar diagram had a faint current indicator and static labels.
+  - Improvements:
+    1. Removed separate legend; added element labels alongside bars.
+    2. Colored current bars at 40% opacity and goal bars at full opacity for clear contrast.
+    3. Added native tooltips (`title` attrs) to show "当前: x%" or "目标: y%" on hover.
+    4. Smooth width transitions for visual polish.
+
+- **Markdown styling for DeepSeek analysis**
+  - Enhancement: Integrated `react-markdown` and `github-markdown-css` to render DeepSeek’s Markdown output in GitHub style.
+
+- **Extended serverless function duration**
+  - Requirement: DeepSeek + OpenAI pipeline often exceeded default 10s timeout.
+  - Solution: Set `module.exports.config = { maxDuration: 60 }` in `api/astro.js` to allow up to 60s per invocation.
+
+With these fixes and improvements applied, the Vercel deployment is now stable, and the UI is more informative and user-friendly.
