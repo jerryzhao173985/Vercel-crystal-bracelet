@@ -7,8 +7,8 @@ module.exports = async (req, res) => {
     res.status(405).json({ error: 'Method Not Allowed' });
     return;
   }
-  const { dob, gender, deepseekKey, openaiKey } = req.body;
-  if (!dob || !gender || !deepseekKey || !openaiKey) {
+  const { dob, birthTime, gender, deepseekKey, openaiKey } = req.body;
+  if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
     res.status(400).json({ error: 'Missing required parameters' });
     return;
   }
@@ -18,6 +18,7 @@ module.exports = async (req, res) => {
 接收用户输入的以下八字信息：
 - 性别：${gender === 'male' ? '男' : '女'}
 - 出生日期：${dob}
+- 出生时间：${birthTime}
 
 请按以下流程输出结果：
 

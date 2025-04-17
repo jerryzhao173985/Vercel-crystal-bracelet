@@ -15,10 +15,12 @@ function App() {
   const [numBeads, setNumBeads] = useState(10);
   // Astrology analysis inputs & results
   const [dob, setDob] = useState('');
+  const [birthTime, setBirthTime] = useState('');
   const [gender, setGender] = useState('');
   const [deepseekKey, setDeepseekKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
   const [analysis, setAnalysis] = useState('');
+  const [analysisExpanded, setAnalysisExpanded] = useState(false);
   const [ratios, setRatios] = useState(null);
   const [loading, setLoading] = useState(false);
 
@@ -75,6 +77,9 @@ function App() {
             <label>出生日期:
               <input type="date" value={dob} onChange={e => setDob(e.target.value)} style={{ width: '100%', padding: 6, marginTop: 4, borderRadius: 4, border: '1px solid #ccc' }}/>
             </label>
+            <label>出生时间:
+              <input type="time" value={birthTime} onChange={e => setBirthTime(e.target.value)} style={{ width: '100%', padding: 6, marginTop: 4, borderRadius: 4, border: '1px solid #ccc' }}/>
+            </label>
             <label>性别:
               <select value={gender} onChange={e => setGender(e.target.value)} style={{ width: '100%', padding: 6, marginTop: 4, borderRadius: 4, border: '1px solid #ccc' }}>
                 <option value="">请选择</option>
@@ -91,7 +96,7 @@ function App() {
             <button onClick={async () => {
                 setLoading(true);
                 try {
-                  const res = await axios.post('/api/astro', { dob, gender, deepseekKey, openaiKey });
+                  const res = await axios.post('/api/astro', { dob, birthTime, gender, deepseekKey, openaiKey });
                   setAnalysis(res.data.analysis);
                   setRatios(res.data.ratios);
                 } catch (err) {
@@ -100,7 +105,7 @@ function App() {
                 }
                 setLoading(false);
               }}
-              disabled={!dob || !gender || !deepseekKey || !openaiKey || loading}
+              disabled={!dob || !birthTime || !gender || !deepseekKey || !openaiKey || loading}
               style={{ padding: '10px', fontSize: 16, borderRadius: 6, border: 'none', background: '#4a90e2', color: '#fff', cursor: 'pointer' }}>
               {loading ? '分析中...' : '开始分析'}
             </button>
@@ -129,8 +134,27 @@ function App() {
         {/* Display analysis and histogram */}
         {analysis && (
           <div style={{ background: '#fff', padding: 20, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', maxWidth: 600, margin: '24px auto' }}>
-            <h3 style={{ marginTop: 0, textAlign: 'center' }}>命理分析结果</h3>
-            <div className="markdown-body" style={{ textAlign: 'left', maxHeight: 300, overflowY: 'auto', marginBottom: 16 }}>
+            <h3 style={{ marginTop: 0, textAlign: 'center', cursor: 'pointer' }} onClick={() => setAnalysisExpanded(!analysisExpanded)}>
+              命理分析结果 {analysisExpanded ? '🔽' : '🔼'}
+            </h3>
+            <div
+              className="markdown-body"
+              style={{
+                textAlign: 'left',
+                maxHeight: analysisExpanded ? 'none' : 200,
+                overflowY: analysisExpanded ? 'visible' : 'auto',
+                marginBottom: 16,
+                position: 'relative',
+                cursor: 'pointer'
+              }}
+              onClick={() => setAnalysisExpanded(!analysisExpanded)}
+            >
+              {!analysisExpanded && (
+                <div style={{
+                  position: 'absolute', bottom: 0, left: 0, right: 0, height: 30,
+                  background: 'linear-gradient(rgba(255,255,255,0), rgba(255,255,255,1))'
+                }} />
+              )}
               <ReactMarkdown>{analysis}</ReactMarkdown>
             </div>
             {ratios && <ElementHistogram current={ratios.current} goal={ratios.goal} />}
