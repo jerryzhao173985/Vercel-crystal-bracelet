@@ -29,6 +29,7 @@ function App() {
   const [isAnimating, setIsAnimating] = useState(false);
   const [growthAnimating, setGrowthAnimating] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
+  const speedRef = React.useRef(speedMultiplier);
 
   // Fetch the bead catalog from the server
   useEffect(() => {
@@ -124,8 +125,9 @@ function App() {
     if (ratios?.goal) randomizeBracelet();
   }, [ratios, numBeads]);
 
-  // Animate randomization: flash randomize 5 times/sec for 5 seconds,
-  // timing dynamically responds to speedMultiplier
+  // Animate randomization: flash randomize for 5 seconds
+  // timing dynamically responds to speedRef.current
+  React.useEffect(() => { speedRef.current = speedMultiplier; }, [speedMultiplier]);
   const animateRandomize = () => {
     if (!ratios?.goal || isAnimating) return;
     setIsAnimating(true);
@@ -138,12 +140,12 @@ function App() {
       }
       randomizeBracelet();
       count++;
-      setTimeout(run, 200 / speedMultiplier);
+      setTimeout(run, 200 / speedRef.current);
     };
     run();
   };
-  // Animate growth: beads count from 1 to maximum (MAX_BEADS) in 5s,
-  // timing dynamically responds to speedMultiplier
+  // Animate growth: beads count from 1 to maximum (MAX_BEADS) in 5s
+  // timing dynamically responds to speedRef.current
   const animateGrow = () => {
     if (!ratios?.goal || growthAnimating) return;
     setGrowthAnimating(true);
@@ -158,7 +160,7 @@ function App() {
       }
       step++;
       setBracelet(generateBeadsList(step));
-      setTimeout(runGrow, baseTime / (target - 1) / speedMultiplier);
+      setTimeout(runGrow, baseTime / (target - 1) / speedRef.current);
     };
     runGrow();
   };
