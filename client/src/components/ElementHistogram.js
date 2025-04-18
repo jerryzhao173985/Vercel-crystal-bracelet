@@ -11,56 +11,68 @@ const ELEMENT_COLORS = {
 
 function ElementHistogram({ current, goal }) {
   // current & goal: { metal, wood, water, fire, earth } percentages
+  const barHeight = 24;
+  const baseColor = '#eee';
   return (
     <div style={{ maxWidth: 600, margin: '24px auto' }}>
       {['metal', 'wood', 'water', 'fire', 'earth'].map((key) => {
         const curr = Math.max(0, Math.min(current[key] || 0, 100));
         const go   = Math.max(0, Math.min(goal[key] || 0, 100));
         const color = ELEMENT_COLORS[key] || '#888';
-        const baseColor = '#eee';
-        // Determine segments: 0..min(curr, go) full opacity, then delta to goal half opacity
-        const firstSegment = Math.min(curr, go);
-        const secondSegment = go > curr ? go - curr : 0;
+        // const baseColor = '#eee'; // defined above
         return (
-          <div key={key} style={{ marginBottom: 24 }}>
-            <div style={{ fontWeight: 600, textTransform: 'capitalize', marginBottom: 8 }}>{key}</div>
-            <div style={{ position: 'relative', width: '100%', height: 20, background: baseColor, borderRadius: 10, overflow: 'hidden' }}>
-              {/* Primary segment (up to current or goal, whichever is smaller) */}
+          <div key={key} style={{ marginBottom: 20 }}>
+            {/* Element name */}
+            <div style={{ fontWeight: 600, fontSize: 14, textTransform: 'capitalize', marginBottom: 6 }}>{key}</div>
+            {/* Bar container */}
+            <div style={{ position: 'relative', width: '100%', height: barHeight, background: baseColor, borderRadius: barHeight/2, overflow: 'visible' }}>
+              {/* Current portion (full opacity) */}
               <div
                 style={{
                   position: 'absolute', top: 0, left: 0,
-                  width: `${firstSegment}%`, height: '100%',
+                  width: `${curr}%`, height: '100%',
                   background: color,
                   opacity: 1,
+                  borderRadius: barHeight/2,
                   transition: 'width 0.3s ease'
                 }}
               />
-              {/* Secondary segment (delta to goal) */}
-              {secondSegment > 0 && (
+              {/* Increment needed (opacity) */}
+              {go > curr && (
                 <div
                   style={{
-                    position: 'absolute', top: 0, left: `${firstSegment}%`,
-                    width: `${secondSegment}%`, height: '100%',
+                    position: 'absolute', top: 0, left: `${curr}%`,
+                    width: `${go - curr}%`, height: '100%',
                     background: color,
                     opacity: 0.4,
                     transition: 'width 0.3s ease'
                   }}
                 />
               )}
-              {/* Current label */}
+              {/* Target marker line for both go < curr and go >= curr */}
+              <div
+                style={{
+                  position: 'absolute', top: -4, left: `${go}%`, transform: 'translateX(-50%)',
+                  width: 2, height: barHeight + 8,
+                  background: color,
+                  opacity: 0.8
+                }}
+              />
+              {/* Percent labels */}
               <span
                 style={{
-                  position: 'absolute', top: -22,
+                  position: 'absolute', top: -20,
                   left: `${curr}%`, transform: 'translateX(-50%)',
-                  fontSize: 12, color: '#333', whiteSpace: 'nowrap'
+                  fontSize: 12, color: '#333',
+                  background: '#fff', padding: '2px 4px', borderRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
                 }}
               >{curr}%</span>
-              {/* Goal label */}
               <span
                 style={{
-                  position: 'absolute', top: -22,
+                  position: 'absolute', top: -20,
                   left: `${go}%`, transform: 'translateX(-50%)',
-                  fontSize: 12, fontWeight: 600, color: color, whiteSpace: 'nowrap'
+                  fontSize: 12, fontWeight: 600, color: '#fff',
+                  background: color, padding: '2px 4px', borderRadius: 4, boxShadow: '0 1px 3px rgba(0,0,0,0.2)'
                 }}
               >{go}%</span>
             </div>

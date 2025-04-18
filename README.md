@@ -238,4 +238,14 @@ Below is a chronological log of issues encountered during Vercel integration and
   - Requirement: DeepSeek + OpenAI pipeline often exceeded default 10s timeout.
   - Solution: Set `module.exports.config = { maxDuration: 60 }` in `api/astro.js` to allow up to 60s per invocation.
 
-With these fixes and improvements applied, the Vercel deployment is now stable, and the UI is more informative and user-friendly.
+ With these fixes and improvements applied, the Vercel deployment is now stable, and the UI is more informative and user-friendly.
+
+---
+## Latest UI Enhancements (Histogram)
+- Introduced a **single continuous bar** per element:
+  - **Full-opacity segment** from 0→current as existing energy.
+  - **Semi-transparent overlay** from current→target (if target > current) to illustrate required increase.
+  - A **vertical marker line** at the target position always visible (even if target < current) to show your aim.
+  - Floating **percentage labels** directly above each segment (current and target) in styled badges for instant clarity—no hover needed.
+  - Ensured zero values still render a minimal visible sliver.
+  - Adjusted bar height, typography, and spacing for a modern, compact, mobile‑friendly design.
