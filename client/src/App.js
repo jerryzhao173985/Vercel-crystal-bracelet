@@ -23,8 +23,10 @@ function App() {
   const [analysisExpanded, setAnalysisExpanded] = useState(false);
   const [ratios, setRatios] = useState(null);
   const [loading, setLoading] = useState(false);
-  // Animation state for flashing randomization
+  // Animation states
   const [isAnimating, setIsAnimating] = useState(false);
+  const [growthAnimating, setGrowthAnimating] = useState(false);
+  const [speedMultiplier, setSpeedMultiplier] = useState(1);
 
   // Fetch the bead catalog from the server
   useEffect(() => {
@@ -73,48 +75,48 @@ function App() {
   const defaultElementColors = {
     metal: '#FFD700', wood: '#228B22', water: '#1E90FF', fire: '#FF4500', earth: '#DEB887'
   };
-  // Randomize bracelet to match goal distribution with colors
-  const randomizeBracelet = () => {
-    if (!ratios?.goal) return;
-    const n = numBeads;
+  // Generate a randomized bead list of length n based on ratios.goal and ratios.colors
+  const generateBeadsList = (n) => {
+    if (!ratios?.goal) return Array(n).fill({ color: '#ccc' });
     const elements = ['metal','wood','water','fire','earth'];
-    // Compute ideal counts
+    // compute float counts
     const floats = elements.map(key => ({
       key,
       floatCount: (ratios.goal[key] || 0) * n / 100
     }));
-    // Floor and remainders
+    // floor counts & remainders
     const counts = floats.map(({ key, floatCount }) => ({
       key,
       count: Math.floor(floatCount),
       rem: floatCount - Math.floor(floatCount)
     }));
-    // Adjust to sum to n
+    // adjust to total n
     let total = counts.reduce((sum, e) => sum + e.count, 0);
     let diff = n - total;
     if (diff > 0) {
-      // assign +1 to largest remainders
       counts.sort((a,b) => b.rem - a.rem);
       for (let i = 0; i < diff; i++) counts[i].count++;
     } else if (diff < 0) {
       counts.sort((a,b) => a.rem - b.rem);
       for (let i = 0; i < -diff; i++) counts[i].count = Math.max(0, counts[i].count - 1);
     }
-    // Build bead list
+    // build list
     const beadsList = [];
     counts.forEach(({ key, count }) => {
       const color = ratios.colors?.[key] || defaultElementColors[key];
       for (let i = 0; i < count; i++) beadsList.push({ color });
     });
-    // Shuffle
+    // shuffle
     for (let i = beadsList.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
       [beadsList[i], beadsList[j]] = [beadsList[j], beadsList[i]];
     }
-    // Pad if mismatch
+    // pad
     while (beadsList.length < n) beadsList.push({ color: '#ccc' });
-    setBracelet(beadsList);
+    return beadsList;
   };
+  // Randomize bracelet to match goal distribution with colors
+  const randomizeBracelet = () => setBracelet(generateBeadsList(numBeads));
   // Auto-randomize on result or bead count change
   useEffect(() => {
     if (ratios?.goal) randomizeBracelet();
@@ -132,7 +134,26 @@ function App() {
         clearInterval(interval);
         setIsAnimating(false);
       }
-    }, 200);
+    }, 200 / speedMultiplier);
+  };
+  // Animate growth: beads count from 1 to numBeads in 5s
+  const animateGrow = () => {
+    if (!ratios?.goal || growthAnimating) return;
+    setGrowthAnimating(true);
+    const target = numBeads;
+    let step = 1;
+    setBracelet(generateBeadsList(step));
+    const baseTime = 5000; // ms
+    const intervalTime = baseTime / (target - 1) / speedMultiplier;
+    const id = setInterval(() => {
+      step++;
+      if (step > target) {
+        clearInterval(id);
+        setGrowthAnimating(false);
+      } else {
+        setBracelet(generateBeadsList(step));
+      }
+    }, intervalTime);
   };
   
   // Render
@@ -201,30 +222,35 @@ function App() {
             paletteBeads={paletteBeads}
           />
         </div>
-        {/* Randomize & Animate Controls */}
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 16, marginBottom: 32 }}>
+        {/* Randomize, Flash Animate & Growth Animate Controls */}
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 16, marginTop: 16, marginBottom: 32, flexWrap: 'wrap' }}>
           <button
             onClick={randomizeBracelet}
-            disabled={!ratios?.goal || isAnimating}
-            style={{
-              padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none',
-              background: !ratios?.goal || isAnimating ? '#ccc' : '#4a90e2',
-              color: '#fff', cursor: !ratios?.goal || isAnimating ? 'not-allowed' : 'pointer'
-            }}
-          >
-            随机排珠
-          </button>
+            disabled={!ratios?.goal || isAnimating || growthAnimating}
+            style={{ padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none', background: !ratios?.goal || isAnimating || growthAnimating ? '#ccc' : '#4a90e2', color: '#fff', cursor: !ratios?.goal || isAnimating || growthAnimating ? 'not-allowed' : 'pointer' }}
+          >随机排珠</button>
           <button
             onClick={animateRandomize}
-            disabled={!ratios?.goal || isAnimating}
-            style={{
-              padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none',
-              background: !ratios?.goal || isAnimating ? '#ccc' : '#4a90e2',
-              color: '#fff', cursor: !ratios?.goal || isAnimating ? 'not-allowed' : 'pointer'
-            }}
-          >
-            {isAnimating ? '动画中...' : '动画'}
-          </button>
+            disabled={!ratios?.goal || isAnimating || growthAnimating}
+            style={{ padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none', background: !ratios?.goal || isAnimating || growthAnimating ? '#ccc' : '#4a90e2', color: '#fff', cursor: !ratios?.goal || isAnimating || growthAnimating ? 'not-allowed' : 'pointer' }}
+          >{isAnimating ? '动画中...' : '动画'}</button>
+          <button
+            onClick={animateGrow}
+            disabled={!ratios?.goal || isAnimating || growthAnimating}
+            style={{ padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none', background: !ratios?.goal || isAnimating || growthAnimating ? '#ccc' : '#4a90e2', color: '#fff', cursor: !ratios?.goal || isAnimating || growthAnimating ? 'not-allowed' : 'pointer' }}
+          >{growthAnimating ? '增长中...' : '增长动画'}</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginLeft: 8 }}>
+            <label style={{ fontSize: 14 }}>速度:</label>
+            <input
+              type="range"
+              min="0.5"
+              max="2"
+              step="0.1"
+              value={speedMultiplier}
+              onChange={e => setSpeedMultiplier(Number(e.target.value))}
+            />
+            <span style={{ fontSize: 14, width: 36, textAlign: 'center' }}>{speedMultiplier.toFixed(1)}x</span>
+          </div>
         </div>
         {/* Display analysis and histogram */}
         {analysis && (
