@@ -23,6 +23,8 @@ function App() {
   const [analysisExpanded, setAnalysisExpanded] = useState(false);
   const [ratios, setRatios] = useState(null);
   const [loading, setLoading] = useState(false);
+  // Animation state for flashing randomization
+  const [isAnimating, setIsAnimating] = useState(false);
 
   // Fetch the bead catalog from the server
   useEffect(() => {
@@ -117,6 +119,21 @@ function App() {
   useEffect(() => {
     if (ratios?.goal) randomizeBracelet();
   }, [ratios, numBeads]);
+
+  // Animate randomization: flash randomize 5 times/sec for 5 seconds
+  const animateRandomize = () => {
+    if (!ratios?.goal || isAnimating) return;
+    setIsAnimating(true);
+    let count = 0;
+    const interval = setInterval(() => {
+      randomizeBracelet();
+      count++;
+      if (count >= 25) {
+        clearInterval(interval);
+        setIsAnimating(false);
+      }
+    }, 200);
+  };
   
   // Render
   return (
@@ -176,23 +193,38 @@ function App() {
             style={{fontSize: 18, width: 60, marginLeft: 8, borderRadius: 6, border: '1px solid #bbb', padding: '2px 8px'}}
           />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 36, position: 'relative' }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 36 }}>
           <BraceletCanvas
             bracelet={bracelet}
             onBeadClick={() => {}}
             onBeadDrop={handleBeadDrop}
             paletteBeads={paletteBeads}
           />
-          {/* Randomize Button */}
+        </div>
+        {/* Randomize & Animate Controls */}
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 16, marginTop: 16, marginBottom: 32 }}>
           <button
             onClick={randomizeBracelet}
-            disabled={!ratios?.goal}
+            disabled={!ratios?.goal || isAnimating}
             style={{
-              position: 'absolute', bottom: 16, right: -20,
-              padding: '8px 12px', fontSize: 14, borderRadius: 6,
-              border: 'none', background: '#4a90e2', color: '#fff', cursor: ratios?.goal ? 'pointer' : 'not-allowed'
+              padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none',
+              background: !ratios?.goal || isAnimating ? '#ccc' : '#4a90e2',
+              color: '#fff', cursor: !ratios?.goal || isAnimating ? 'not-allowed' : 'pointer'
             }}
-          >随机排珠</button>
+          >
+            随机排珠
+          </button>
+          <button
+            onClick={animateRandomize}
+            disabled={!ratios?.goal || isAnimating}
+            style={{
+              padding: '8px 16px', fontSize: 14, borderRadius: 6, border: 'none',
+              background: !ratios?.goal || isAnimating ? '#ccc' : '#4a90e2',
+              color: '#fff', cursor: !ratios?.goal || isAnimating ? 'not-allowed' : 'pointer'
+            }}
+          >
+            {isAnimating ? '动画中...' : '动画'}
+          </button>
         </div>
         {/* Display analysis and histogram */}
         {analysis && (
