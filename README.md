@@ -513,3 +513,185 @@ This final solution delivers:
 - A robust serverless astrology API that respects eight‑character input.
 - Precise structured parsing of both current and target五行 ratios.
 - A polished, interactive UI with collapsible analysis and intuitive energy histogram.
+
+---
+
+## Latest Feature Rollout
+
+Date: 18 Apr 2025
+
+### 1. DeepSeek Prompt Enhancement for Personalized HEX Colors
+
+To retrieve per-element HEX colors specifically tuned to a person’s 八字, we refined the prompt sent to the DeepSeek API:
+- Added an explicit Markdown table column `推荐颜色` (#RRGGBB) so DeepSeek generates custom color codes.
+- Emphasized that the colors should uniquely resonate with the user’s birth pillars, ensuring meaningful recommendations.
+
+**Excerpt from `api/astro.js` (serverless function):**
+
+```javascript
+const prompt = `
+你是一位精通五行调节的命理大师...
+为了与此用户的八字共振，请为每个五行元素量身定制一个唯一的十六进制颜色(#RRGGBB)...
+请按以下流程输出：
+
+3. 五行调节比例：请使用Markdown表格，包含“推荐颜色”列，其值为上面定制的专属HEX颜色：
+| 五行 | 原局比例 | 调节目标 | 推荐颜色 |
+| ---- | ---- | ---- | -------- |
+| 金   | xx%   | yy%   | #RRGGBB |
+...
+
+请用现代白话文分段论述，格式简洁，术语准确。
+`;
+```
+
+Correspondingly, the JSON schema parsed by OpenAI’s Responses API now includes a colors object:
+- `current`: `{ metal:number, wood:number, water:number, fire:number, earth:number }`
+- `goal`: `{ metal:number, wood:number, water:number, fire:number, earth:number }`
+- `colors`: `{ metal:string("#RRGGBB"), wood:string, water:string, fire:string, earth:string }`
+
+These color codes feed directly into the UI.
+
+---
+
+### 2. Enhanced Element Histogram with Dynamic Colors
+
+The histogram now renders each element with the user‐specific HEX color from DeepSeek (`ratios.colors`), falling back to a default if unavailable.
+
+**Key lines in `ElementHistogram.js`:**
+
+```javascript
+const color = (colors && colors[key]) || ELEMENT_COLORS[key] || '#888';
+
+<div style={{ background: color }} />
+```
+
+Additionally, we handle the original vs. target percentages, a vertical marker for the goal, and floating labels for clarity.
+
+---
+
+### 3. Bracelet Randomization Feature
+
+Upon receiving final data (`current`, `goal`, `colors`), the user’s bracelet auto-populates with beads matching the goal proportions. A “随机排珠” (Randomize) button triggers re-randomization.
+
+**Important logic in `App.js`:**
+
+```javascript
+function generateBeadsList(n) {
+  if (!ratios?.goal) return Array(n).fill({ color: '#ccc' });
+  // Distribute elements based on goal percentages...
+  // (floor + remainder technique) and shuffle
+}
+
+function randomizeBracelet() {
+  setBracelet(generateBeadsList(numBeads));
+}
+```
+
+After computing an ideal distribution (e.g., fire occupies 30% of beads), we create an array of that many “fire” beads, perform a Fisher–Yates shuffle, and assign it to the bracelet. It is called automatically once results are available and via the Randomize button.
+
+---
+
+### 4. Two Animation Modes + Speed Control
+
+#### A. Flash Shuffle (“动画”)
+- Shuffles bracelet repeatedly (25 times over ~5 s) for an engaging flashing animation.
+- Uses recursive `setTimeout`, referencing `speedRef.current` so live changes in `speedMultiplier` immediately affect the animation speed.
+
+**Example snippet:**
+
+```javascript
+React.useEffect(() => { speedRef.current = speedMultiplier; }, [speedMultiplier]);
+
+function animateRandomize() {
+  if (!ratios?.goal || isAnimating) return;
+  setIsAnimating(true);
+  let count = 0;
+
+  const run = () => {
+    if (count >= 25) { setIsAnimating(false); return; }
+    randomizeBracelet();
+    count++;
+    setTimeout(run, 200 / speedRef.current);
+  };
+  run();
+}
+```
+
+#### B. Growth Animation (“增长动画”)
+- Bracelet visually grows from 1 bead to maximum (e.g., 20 beads) over ~5 s.
+- Each incremental step calls `generateBeadsList(step)` to visually build the bracelet in real-time.
+
+**Example snippet:**
+
+```javascript
+function animateGrow() {
+  if (!ratios?.goal || growthAnimating) return;
+  setGrowthAnimating(true);
+
+  const target = MAX_BEADS;
+  let step = 1;
+  setBracelet(generateBeadsList(step));
+
+  const runGrow = () => {
+    if (step >= target) { setGrowthAnimating(false); return; }
+    step++;
+    setBracelet(generateBeadsList(step));
+    setTimeout(runGrow, 5000 / (target - 1) / speedRef.current);
+  };
+  runGrow();
+}
+```
+
+#### C. Speed Slider
+- Range from 0.5× to 2.0×.
+- Slider remains active during animations, allowing dynamic speed adjustments.
+
+**HTML snippet (`App.js`):**
+
+```jsx
+<label>速度:</label>
+<input type="range" min="0.5" max="2" step="0.1" value={speedMultiplier} onChange={e => setSpeedMultiplier(Number(e.target.value))} style={{ width: 120 }} />
+<span>{speedMultiplier.toFixed(1)}×</span>
+```
+
+---
+
+### 5. Copy Report Feature
+
+Added a button in the analysis panel to copy both the raw text analysis and structured JSON data (`ratios`) to the clipboard for easy archiving or sharing.
+
+**Minimal example (`App.js`):**
+
+```jsx
+<button onClick={() => {
+  const report = JSON.stringify({ analysis, ratios }, null, 2);
+  navigator.clipboard.writeText(report)
+    .then(() => alert('报告已复制到剪贴板'))
+    .catch(() => alert('复制失败'));
+}}>
+复制报告
+</button>
+```
+
+---
+
+### 6. Additional Minor Enhancements
+- Disabled the Number of Beads input during animations to avoid conflicts.
+- Buttons for Randomization and Animation repositioned below the bracelet for improved visibility.
+- Resized speed slider remains active during animations for real-time adjustments.
+
+---
+
+### 7. Potential Future Improvement
+
+After Growth Animation completes at max bead count, consider reverting automatically or providing a small pop-up:
+
+> “手串已全数展现，可保持 20 颗或恢复至您原本设置的 N 颗。”
+
+This may enhance consistency and user experience post-animation.
+
+The current design is consistent and functionally complete.
+
+---
+
+
