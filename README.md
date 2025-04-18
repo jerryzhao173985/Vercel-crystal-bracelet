@@ -252,6 +252,49 @@ Below is a chronological log of issues encountered during Vercel integration and
 
 ---
 ## Final Implementation Summary & Key Code Snippets
+### 5. Bracelet Randomization Feature
+通过用户八字计算出的调节目标 (`ratios.goal`) 和推荐共振色 (`ratios.colors`)，自动为手串生成彩珠队列：
+1. 根据目标比例与手串长度 (`numBeads`) 计算每种元素所需珠子数量（四舍五入并调整误差）。
+2. 填充对应数量的彩珠对象，每个包含 `{ color: '#RRGGBB' }`。
+3. Fisher–Yates 随机打乱数组，确保视觉分布随机。
+4. 初始化分析完成后自动调用；右侧提供「随机排珠」按钮，可手动重新生成。
+
+核心实现示例（摘自 `App.js`）：
+```js
+// 默认备用色
+const defaultElementColors = {
+  metal: '#FFD700', wood: '#228B22', water: '#1E90FF', fire: '#FF4500', earth: '#DEB887'
+};
+// 根据 ratios.goal & ratios.colors 随机生成手串
+function randomizeBracelet() {
+  const n = numBeads;
+  const elems = ['metal','wood','water','fire','earth'];
+  // 计算浮点数
+  const floats = elems.map(k => ({ key:k, f: (ratios.goal[k]||0)*n/100 }));
+  // 整数部分与余数
+  const counts = floats.map(({key,f}) => ({ key, count: Math.floor(f), rem: f - Math.floor(f) }));
+  // 调整误差
+  let diff = n - counts.reduce((sum,e)=>sum+e.count,0);
+  counts.sort((a,b)=> b.rem - a.rem);
+  for (let i = 0; i < Math.abs(diff); i++) {
+    const idx = diff>0 ? i : counts.length-1-i;
+    counts[idx].count += diff>0 ? 1 : -1;
+  }
+  // 构造并打乱
+  let beads = [];
+  counts.forEach(({key,count}) => {
+    const color = ratios.colors[key] || defaultElementColors[key];
+    for(let i=0;i<count;i++) beads.push({ color });
+  });
+  for (let i = beads.length-1; i > 0; i--) {
+    const j = Math.floor(Math.random()*(i+1));
+    [beads[i], beads[j]] = [beads[j], beads[i]];
+  }
+  setBracelet(beads);
+}
+// 按钮调用示例（嵌入在 <BraceletCanvas /> 旁）
+<button onClick={randomizeBracelet} disabled={!ratios.goal}>随机排珠</button>
+```
 Below is a concise overview of the final architecture, plus essential code excerpts illustrating the production‑ready solution.
 
 ### 1. Vercel Configuration (`vercel.json`)

@@ -67,6 +67,57 @@ function App() {
     ? Object.entries(ratios.colors).map(([key, color]) => ({ id: key, color }))
     : beads.map((b) => ({ id: b.id, img: b.img || b.image || b.url || '', color: b.color }));
 
+  // Default colors in case API colors missing
+  const defaultElementColors = {
+    metal: '#FFD700', wood: '#228B22', water: '#1E90FF', fire: '#FF4500', earth: '#DEB887'
+  };
+  // Randomize bracelet to match goal distribution with colors
+  const randomizeBracelet = () => {
+    if (!ratios?.goal) return;
+    const n = numBeads;
+    const elements = ['metal','wood','water','fire','earth'];
+    // Compute ideal counts
+    const floats = elements.map(key => ({
+      key,
+      floatCount: (ratios.goal[key] || 0) * n / 100
+    }));
+    // Floor and remainders
+    const counts = floats.map(({ key, floatCount }) => ({
+      key,
+      count: Math.floor(floatCount),
+      rem: floatCount - Math.floor(floatCount)
+    }));
+    // Adjust to sum to n
+    let total = counts.reduce((sum, e) => sum + e.count, 0);
+    let diff = n - total;
+    if (diff > 0) {
+      // assign +1 to largest remainders
+      counts.sort((a,b) => b.rem - a.rem);
+      for (let i = 0; i < diff; i++) counts[i].count++;
+    } else if (diff < 0) {
+      counts.sort((a,b) => a.rem - b.rem);
+      for (let i = 0; i < -diff; i++) counts[i].count = Math.max(0, counts[i].count - 1);
+    }
+    // Build bead list
+    const beadsList = [];
+    counts.forEach(({ key, count }) => {
+      const color = ratios.colors?.[key] || defaultElementColors[key];
+      for (let i = 0; i < count; i++) beadsList.push({ color });
+    });
+    // Shuffle
+    for (let i = beadsList.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [beadsList[i], beadsList[j]] = [beadsList[j], beadsList[i]];
+    }
+    // Pad if mismatch
+    while (beadsList.length < n) beadsList.push({ color: '#ccc' });
+    setBracelet(beadsList);
+  };
+  // Auto-randomize on result or bead count change
+  useEffect(() => {
+    if (ratios?.goal) randomizeBracelet();
+  }, [ratios, numBeads]);
+  
   // Render
   return (
     <DndProvider backend={HTML5Backend}>
@@ -125,13 +176,23 @@ function App() {
             style={{fontSize: 18, width: 60, marginLeft: 8, borderRadius: 6, border: '1px solid #bbb', padding: '2px 8px'}}
           />
         </div>
-        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 36 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 36, position: 'relative' }}>
           <BraceletCanvas
             bracelet={bracelet}
             onBeadClick={() => {}}
             onBeadDrop={handleBeadDrop}
             paletteBeads={paletteBeads}
           />
+          {/* Randomize Button */}
+          <button
+            onClick={randomizeBracelet}
+            disabled={!ratios?.goal}
+            style={{
+              position: 'absolute', bottom: 16, right: -20,
+              padding: '8px 12px', fontSize: 14, borderRadius: 6,
+              border: 'none', background: '#4a90e2', color: '#fff', cursor: ratios?.goal ? 'pointer' : 'not-allowed'
+            }}
+          >随机排珠</button>
         </div>
         {/* Display analysis and histogram */}
         {analysis && (
