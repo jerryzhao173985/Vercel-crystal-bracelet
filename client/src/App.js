@@ -62,8 +62,10 @@ function App() {
     }
   };
 
-  // Prepare beads for SidePalette (with img)
-  const paletteBeads = beads.map((b) => ({ ...b, img: b.img || b.image || b.url || '', color: b.color }));
+  // Prepare beads for SidePalette: use dynamic colors if available, otherwise default beads
+  const paletteBeads = ratios && ratios.colors
+    ? Object.entries(ratios.colors).map(([key, color]) => ({ id: key, color }))
+    : beads.map((b) => ({ id: b.id, img: b.img || b.image || b.url || '', color: b.color }));
 
   // Render
   return (
@@ -157,7 +159,7 @@ function App() {
               )}
               <ReactMarkdown>{analysis}</ReactMarkdown>
             </div>
-            {ratios && <ElementHistogram current={ratios.current} goal={ratios.goal} />}
+            {ratios && <ElementHistogram current={ratios.current} goal={ratios.goal} colors={ratios.colors} />}
           </div>
         )}
       </div>

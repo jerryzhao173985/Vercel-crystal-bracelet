@@ -69,8 +69,15 @@ module.exports = async (req, res) => {
     const oaRes = await oaClient.responses.create({
       model: 'gpt-4.1',
       input: [
-        { role: 'system', content: '你是一个JSON解析器，只输出包含 current(当前五行分布) 和 goal(最佳调节比例) 两个对象，每个包含金、木、水、火、土的百分比，不要额外文字。' },
-        { role: 'user', content: `请从以下内容中抽取 current 和 goal，并以纯JSON输出：\n\n${analysisText}` }
+        {
+          role: 'system',
+          content: '你是一个JSON解析器，只输出包含 current（当前分布）、goal（最佳调节比例）和 colors（推荐颜色）三个对象，不要额外文字。' +
+                   'current 和 goal 对象的属性金、木、水、火、土为数字百分比；colors 对象的属性金、木、水、火、土为十六进制颜色字符串。'
+        },
+        {
+          role: 'user',
+          content: `请从以下内容中抽取 current、goal 和 colors，并以纯JSON输出：\n\n${analysisText}`
+        }
       ],
       text: {
         format: {
@@ -82,11 +89,11 @@ module.exports = async (req, res) => {
               current: {
                 type: 'object',
                 properties: {
-                  metal: { type: 'number' },
-                  wood: { type: 'number' },
-                  water: { type: 'number' },
-                  fire: { type: 'number' },
-                  earth: { type: 'number' }
+                  metal:  { type: 'number' },
+                  wood:   { type: 'number' },
+                  water:  { type: 'number' },
+                  fire:   { type: 'number' },
+                  earth:  { type: 'number' }
                 },
                 required: ['metal','wood','water','fire','earth'],
                 additionalProperties: false
@@ -94,17 +101,29 @@ module.exports = async (req, res) => {
               goal: {
                 type: 'object',
                 properties: {
-                  metal: { type: 'number' },
-                  wood: { type: 'number' },
-                  water: { type: 'number' },
-                  fire: { type: 'number' },
-                  earth: { type: 'number' }
+                  metal:  { type: 'number' },
+                  wood:   { type: 'number' },
+                  water:  { type: 'number' },
+                  fire:   { type: 'number' },
+                  earth:  { type: 'number' }
+                },
+                required: ['metal','wood','water','fire','earth'],
+                additionalProperties: false
+              },
+              colors: {
+                type: 'object',
+                properties: {
+                  metal:  { type: 'string' },
+                  wood:   { type: 'string' },
+                  water:  { type: 'string' },
+                  fire:   { type: 'string' },
+                  earth:  { type: 'string' }
                 },
                 required: ['metal','wood','water','fire','earth'],
                 additionalProperties: false
               }
             },
-            required: ['current','goal'],
+            required: ['current','goal','colors'],
             additionalProperties: false
           }
         }

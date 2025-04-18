@@ -9,7 +9,7 @@ const ELEMENT_COLORS = {
   earth: '#DEB887'   // 土: burlywood
 };
 
-function ElementHistogram({ current, goal }) {
+function ElementHistogram({ current, goal, colors }) {
   // current & goal: { metal, wood, water, fire, earth } percentages
   const barHeight = 24;
   const baseColor = '#eee';
@@ -18,7 +18,7 @@ function ElementHistogram({ current, goal }) {
       {['metal', 'wood', 'water', 'fire', 'earth'].map((key) => {
         const curr = Math.max(0, Math.min(current[key] || 0, 100));
         const go   = Math.max(0, Math.min(goal[key] || 0, 100));
-        const color = ELEMENT_COLORS[key] || '#888';
+        const color = (colors && colors[key]) || ELEMENT_COLORS[key] || '#888';
         // const baseColor = '#eee'; // defined above
         return (
           <div key={key} style={{ marginBottom: 20 }}>

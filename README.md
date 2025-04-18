@@ -305,9 +305,25 @@ module.exports = async (req, res) => {
   const oaRes = await oa.responses.create({
     model: 'gpt-4.1',
     input: [
-      {role:'system',content:'只输出current和goal对象的JSON schema'},
-      {role:'user',content:`请提取current和goal：\n\n${analysisText}`}],
-    text: { format: { type:'json_schema', name:'five_element', schema: {/*...*/} } }
+      { role: 'system', content: '你是一个JSON解析器，只输出包含 current、goal 和 colors 三个对象，不要额外文字。' },
+      { role: 'user', content: `请提取 current（原局比例）、goal（调节目标）以及 colors（推荐颜色）并输出纯JSON：\n\n${analysisText}` }
+    ],
+    text: {
+      format: {
+        type: 'json_schema',
+        name: 'five_element_distribution',
+        schema: {
+          type: 'object',
+          properties: {
+            current: { type: 'object', /* 金木水火土: number */ },
+            goal:    { type: 'object', /* 金木水火土: number */ },
+            colors:  { type: 'object', /* 金木水火土: string(#RRGGBB) */ }
+          },
+          required: ['current','goal','colors'],
+          additionalProperties: false
+        }
+      }
+    }
   });
   const ratios = JSON.parse(oaRes.output_text);
   res.status(200).json({ analysis: analysisText, ratios });
@@ -336,14 +352,14 @@ const [analysisExpanded, setAnalysisExpanded] = useState(false);
 ### 4. Element Histogram Component (`ElementHistogram.js`)
 ```jsx
 const ELEMENT_COLORS = { metal:'#FFD700', wood:'#228B22', water:'#1E90FF', fire:'#FF4500', earth:'#DEB887' };
-function ElementHistogram({ current, goal }) {
+function ElementHistogram({ current, goal, colors }) {
   const barHeight = 24;
   return (
     <div style={{ width: '100%', maxWidth:600 }}>
       {['metal','wood','water','fire','earth'].map(key => {
         const curr = Math.min(Math.max(0,current[key]||0),100);
         const go = Math.min(Math.max(0,goal[key]||0),100);
-        const color = ELEMENT_COLORS[key];
+        const color = colors[key] || ELEMENT_COLORS[key];
         return (
           <div key={key} style={{ margin:'16px 0' }}>
             <div style={{ fontWeight:600 }}>{key}</div>
