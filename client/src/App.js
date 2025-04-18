@@ -7,6 +7,8 @@ import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 
 function App() {
+  // Maximum beads allowed (matches input max attribute)
+  const MAX_BEADS = Number(20); // can update here or sync with input max
   // List of available beads from the server
   const [beads, setBeads] = useState([]);
   // The user's bracelet: each item in the array is { color: ... }
@@ -122,38 +124,43 @@ function App() {
     if (ratios?.goal) randomizeBracelet();
   }, [ratios, numBeads]);
 
-  // Animate randomization: flash randomize 5 times/sec for 5 seconds
+  // Animate randomization: flash randomize 5 times/sec for 5 seconds,
+  // timing dynamically responds to speedMultiplier
   const animateRandomize = () => {
     if (!ratios?.goal || isAnimating) return;
     setIsAnimating(true);
     let count = 0;
-    const interval = setInterval(() => {
+    // recursive timeout to adapt to speedMultiplier changes
+    const run = () => {
+      if (count >= 25) {
+        setIsAnimating(false);
+        return;
+      }
       randomizeBracelet();
       count++;
-      if (count >= 25) {
-        clearInterval(interval);
-        setIsAnimating(false);
-      }
-    }, 200 / speedMultiplier);
+      setTimeout(run, 200 / speedMultiplier);
+    };
+    run();
   };
-  // Animate growth: beads count from 1 to numBeads in 5s
+  // Animate growth: beads count from 1 to maximum (MAX_BEADS) in 5s,
+  // timing dynamically responds to speedMultiplier
   const animateGrow = () => {
     if (!ratios?.goal || growthAnimating) return;
     setGrowthAnimating(true);
-    const target = numBeads;
+    const target = MAX_BEADS;
     let step = 1;
     setBracelet(generateBeadsList(step));
-    const baseTime = 5000; // ms
-    const intervalTime = baseTime / (target - 1) / speedMultiplier;
-    const id = setInterval(() => {
-      step++;
-      if (step > target) {
-        clearInterval(id);
+    const baseTime = 5000; // ms for full grow
+    const runGrow = () => {
+      if (step >= target) {
         setGrowthAnimating(false);
-      } else {
-        setBracelet(generateBeadsList(step));
+        return;
       }
-    }, intervalTime);
+      step++;
+      setBracelet(generateBeadsList(step));
+      setTimeout(runGrow, baseTime / (target - 1) / speedMultiplier);
+    };
+    runGrow();
   };
   
   // Render
@@ -207,11 +214,12 @@ function App() {
           <input
             type="number"
             id="numBeads"
-            min="1"
-            max="20"
+            min={1}
+            max={MAX_BEADS}
             value={numBeads}
             onChange={(e) => setNumBeads(Number(e.target.value))}
-            style={{fontSize: 18, width: 60, marginLeft: 8, borderRadius: 6, border: '1px solid #bbb', padding: '2px 8px'}}
+            disabled={isAnimating || growthAnimating}
+            style={{fontSize: 18, width: 60, marginLeft: 8, borderRadius: 6, border: '1px solid #bbb', padding: '2px 8px', background: (isAnimating||growthAnimating) ? '#eee' : '#fff'}}
           />
         </div>
         <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'flex-start', gap: 36 }}>
@@ -248,6 +256,7 @@ function App() {
               step="0.1"
               value={speedMultiplier}
               onChange={e => setSpeedMultiplier(Number(e.target.value))}
+              style={{ width: 120 }}
             />
             <span style={{ fontSize: 14, width: 36, textAlign: 'center' }}>{speedMultiplier.toFixed(1)}x</span>
           </div>
