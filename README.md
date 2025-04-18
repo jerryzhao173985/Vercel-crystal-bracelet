@@ -249,3 +249,120 @@ Below is a chronological log of issues encountered during Vercel integration and
   - Floating **percentage labels** directly above each segment (current and target) in styled badges for instant clarity—no hover needed.
   - Ensured zero values still render a minimal visible sliver.
   - Adjusted bar height, typography, and spacing for a modern, compact, mobile‑friendly design.
+
+---
+## Final Implementation Summary & Key Code Snippets
+Below is a concise overview of the final architecture, plus essential code excerpts illustrating the production‑ready solution.
+
+### 1. Vercel Configuration (`vercel.json`)
+```json
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "client/build",
+        "installCommand": "npm install",
+        "buildCommand": "npm run vercel-build"
+      }
+    },
+    {
+      "src": "api/**/*.js",
+      "use": "@vercel/node"
+    }
+  ],
+  "routes": [
+    { "handle": "filesystem" },
+    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "src": "/(.*)",      "dest": "/index.html" }
+  ]
+}
+```
+
+### 2. Serverless Astrology Endpoint (`api/astro.js`)
+```js
+const OpenAI = require('openai');
+
+module.exports = async (req, res) => {
+  const { dob, birthTime, gender, deepseekKey, openaiKey } = req.body;
+  // Prompt assembly includes time for 八字 completeness
+  const prompt = `你是一位...\n
+接收用户输入：
+- 性别：${gender==='male'?'男':'女'}
+- 出生日期：${dob}
+- 出生时间：${birthTime}
+... 3. 五行比例：
+请使用 Markdown 表格输出：
+| 五行 | 原局比例 | 调节目标 |\n|金|xx%|yy%|...`;
+  // DeepSeek chat
+  const ds = new OpenAI({ baseURL: 'https://api.deepseek.com', apiKey: deepseekKey });
+  const dsRes = await ds.chat.completions.create({ model: 'deepseek-chat', messages: [{role:'system',content:prompt}] });
+  const analysisText = dsRes.choices[0].message.content;
+  // Structured parse via OpenAI Responses API
+  const oa = new OpenAI({ apiKey: openaiKey });
+  const oaRes = await oa.responses.create({
+    model: 'gpt-4.1',
+    input: [
+      {role:'system',content:'只输出current和goal对象的JSON schema'},
+      {role:'user',content:`请提取current和goal：\n\n${analysisText}`}],
+    text: { format: { type:'json_schema', name:'five_element', schema: {/*...*/} } }
+  });
+  const ratios = JSON.parse(oaRes.output_text);
+  res.status(200).json({ analysis: analysisText, ratios });
+};
+module.exports.config = { maxDuration: 60 };
+```
+
+### 3. Client‑Side Analysis Panel (`client/src/App.js`)
+```jsx
+// State hooks for DOB, time, gender, keys, and expansion
+const [dob, setDob] = useState('');
+const [birthTime, setBirthTime] = useState('');
+const [analysis, setAnalysis] = useState('');
+const [analysisExpanded, setAnalysisExpanded] = useState(false);
+
+// Expandable markdown card
+<div className="markdown-body" style={{
+  maxHeight: analysisExpanded ? 'none' : 200,
+  overflowY: analysisExpanded ? 'visible' : 'auto'
+}} onClick={() => setAnalysisExpanded(!analysisExpanded)}>
+  { !analysisExpanded && <div className="fade-overlay" /> }
+  <ReactMarkdown>{analysis}</ReactMarkdown>
+</div>
+```
+
+### 4. Element Histogram Component (`ElementHistogram.js`)
+```jsx
+const ELEMENT_COLORS = { metal:'#FFD700', wood:'#228B22', water:'#1E90FF', fire:'#FF4500', earth:'#DEB887' };
+function ElementHistogram({ current, goal }) {
+  const barHeight = 24;
+  return (
+    <div style={{ width: '100%', maxWidth:600 }}>
+      {['metal','wood','water','fire','earth'].map(key => {
+        const curr = Math.min(Math.max(0,current[key]||0),100);
+        const go = Math.min(Math.max(0,goal[key]||0),100);
+        const color = ELEMENT_COLORS[key];
+        return (
+          <div key={key} style={{ margin:'16px 0' }}>
+            <div style={{ fontWeight:600 }}>{key}</div>
+            <div style={{ position:'relative', background:'#eee', height:barHeight, borderRadius:barHeight/2 }}>
+              <div style={{ width:`${curr}%`, height:'100%', background:color, borderRadius:barHeight/2 }} />
+              {go>curr && <div style={{ position:'absolute', left:`${curr}%`, width:`${go-curr}%`, height:'100%', background:color, opacity:0.4 }} />}
+              <div style={{ position:'absolute', left:`${go}%`, top:-4, width:2, height:barHeight+8, background:color }} />
+              <span style={{ position:'absolute', left:`${curr}%`, top:-20, transform:'translateX(-50%)', background:'#fff', padding:'2px 4px' }}>{curr}%</span>
+              <span style={{ position:'absolute', left:`${go}%`, top:-20, transform:'translateX(-50%)', background:color, color:'#fff', padding:'2px 4px' }}>{go}%</span>
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+```
+
+This final solution delivers:
+- A robust serverless astrology API that respects eight‑character input.
+- Precise structured parsing of both current and target五行 ratios.
+- A polished, interactive UI with collapsible analysis and intuitive energy histogram.
