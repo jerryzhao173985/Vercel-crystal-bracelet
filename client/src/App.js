@@ -265,7 +265,7 @@ function App() {
         </div>
         {/* Display analysis and histogram */}
         {analysis && (
-          <div style={{ background: '#fff', padding: 20, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', maxWidth: 600, margin: '24px auto' }}>
+          <div style={{ background: '#fff', padding: 20, borderRadius: 12, boxShadow: '0 2px 12px rgba(0,0,0,0.08)', maxWidth: 600, margin: '24px auto', position: 'relative' }}>
             <h3 style={{ marginTop: 0, textAlign: 'center', cursor: 'pointer' }} onClick={() => setAnalysisExpanded(!analysisExpanded)}>
               命理分析结果 {analysisExpanded ? '🔽' : '🔼'}
             </h3>
@@ -290,6 +290,16 @@ function App() {
               <ReactMarkdown>{analysis}</ReactMarkdown>
             </div>
             {ratios && <ElementHistogram current={ratios.current} goal={ratios.goal} colors={ratios.colors} />}
+            {/* Copy report button */}
+            <button
+              onClick={() => {
+                const report = JSON.stringify({ analysis, ratios }, null, 2);
+                navigator.clipboard.writeText(report)
+                  .then(() => alert('报告已复制到剪贴板'))
+                  .catch(() => alert('复制失败'));
+              }}
+              style={{ marginTop: 12, padding: '6px 12px', fontSize: 14, borderRadius: 4, border: '1px solid #4a90e2', background: '#fff', color: '#4a90e2', cursor: 'pointer' }}
+            >复制报告</button>
           </div>
         )}
       </div>

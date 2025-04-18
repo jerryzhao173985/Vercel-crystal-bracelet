@@ -292,8 +292,86 @@ function randomizeBracelet() {
   }
   setBracelet(beads);
 }
-// 按钮调用示例（嵌入在 <BraceletCanvas /> 旁）
+// 按钮调用示例（嵌入在 <BraceletCanvas /> 下方）
 <button onClick={randomizeBracelet} disabled={!ratios.goal}>随机排珠</button>
+```
+
+### 6. Copy Report Feature
+在分析结果面板下方添加“复制报告”按钮，允许用户一键将当前分析文字及结构化JSON(`analysis`和`ratios`)复制到剪贴板。该功能便于存档和分享。
+```jsx
+<button
+  onClick={() => {
+    const report = JSON.stringify({ analysis, ratios }, null, 2);
+    navigator.clipboard.writeText(report)
+      .then(() => alert('报告已复制到剪贴板'))
+      .catch(() => alert('复制失败'));
+  }}
+  style={{ padding: '6px 12px', fontSize: 14, borderRadius: 4, border: '1px solid #4a90e2', background: '#fff', color: '#4a90e2' }}
+>复制报告</button>
+```
+
+### 7. Animation & Speed Controls
+本实现提供两种动画模式，配合可实时调节的速度滑块，以提升交互体验：
+
+- **闪动随机化（Flash Shuffle）**
+  - 调用 `animateRandomize()` 函数，通过递归 `setTimeout` 调用 `randomizeBracelet()`，在5秒内每秒5次地重新排列珠子。
+  - 使用 `speedRef.current` 确保 `speedMultiplier` 变动时，下一次动画间隔立即生效。
+```js
+React.useEffect(() => { speedRef.current = speedMultiplier; }, [speedMultiplier]);
+function animateRandomize() {
+  if (isAnimating) return;
+  setIsAnimating(true);
+  let count = 0;
+  const run = () => {
+    if (count >= 25) {
+      setIsAnimating(false);
+      return;
+    }
+    randomizeBracelet();
+    count++;
+    setTimeout(run, 200 / speedRef.current);
+  };
+  run();
+}
+```
+
+- **增长动画（Growth Animation）**
+  - 调用 `animateGrow()` 函数，通过递归 `setTimeout` 按段动态生成长度从1至最大上限（`MAX_BEADS`）的手串。
+  - 可实时修改 `speedMultiplier` 控制增速或减速。
+```js
+function animateGrow() {
+  if (growthAnimating) return;
+  setGrowthAnimating(true);
+  const target = MAX_BEADS;
+  let step = 1;
+  setBracelet(generateBeadsList(step));
+  const runGrow = () => {
+    if (step >= target) {
+      setGrowthAnimating(false);
+      return;
+    }
+    step++;
+    setBracelet(generateBeadsList(step));
+    setTimeout(runGrow, 5000/(target-1)/speedRef.current);
+  };
+  runGrow();
+}
+```
+
+- **速度滑块（Speed Slider）**
+  - 范围 `0.5×` 到 `2.0×`，步进 `0.1×`。
+  - 可在动画运行时拖动，实时影响上述两种动画的时间间隔，无需中断或重启动画。
+```jsx
+<input
+  type="range" min="0.5" max="2" step="0.1"
+  value={speedMultiplier}
+  onChange={e => setSpeedMultiplier(Number(e.target.value))}
+  style={{ width: 120 }}
+/>
+<span>{speedMultiplier.toFixed(1)}×</span>
+```
+
+此功能使用户可根据偏好动态调整动画节奏，提升灵活性与趣味性。
 ```
 Below is a concise overview of the final architecture, plus essential code excerpts illustrating the production‑ready solution.
 
