@@ -287,12 +287,22 @@ const OpenAI = require('openai');
 
 module.exports = async (req, res) => {
   const { dob, birthTime, gender, deepseekKey, openaiKey } = req.body;
-  // Prompt assembly includes time for 八字 completeness
-  const prompt = `你是一位...\n
-接收用户输入：
+  // Prompt assembly includes time and color instructions for element adjustments
+  const prompt = `你是一位精通五行调节的命理大师，性格开放、灵活可变，不做传统算命，只专注于根据八字分析五行偏颇，并给出精准调节方案。
+
+接收用户输入的八字信息：
 - 性别：${gender==='male'?'男':'女'}
 - 出生日期：${dob}
 - 出生时间：${birthTime}
+
+请按以下流程输出，3. 五行比例需输出含“推荐颜色”列的Markdown表格：
+| 五行 | 原局比例 | 调节目标 | 推荐颜色 |
+| ---- | ---- | ---- | -------- |
+| 金   | xx%   | yy%   | #RRGGBB |
+| 木   | xx%   | yy%   | #RRGGBB |
+| 水   | xx%   | yy%   | #RRGGBB |
+| 火   | xx%   | yy%   | #RRGGBB |
+| 土   | xx%   | yy%   | #RRGGBB |
 ... 3. 五行比例：
 请使用 Markdown 表格输出：
 | 五行 | 原局比例 | 调节目标 |\n|金|xx%|yy%|...`;
