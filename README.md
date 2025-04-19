@@ -1,30 +1,3 @@
----
-## 8. Bracelet Arrangement API
-To support external apps or services needing a ready-to-render bead sequence, a dedicated endpoint `/api/arrange` was added.
-URL: POST `/api/arrange`
-Request JSON:
-```json
-{
-  "numBeads": 20,
-  "ratios": {
-    "goal":  { "metal":10, "wood":25, ... },
-    "colors": { "metal":"#C19A6B", "wood":"#228B22", ... }
-  },
-  "seed": 12345  // optional for deterministic shuffle
-}
-```
-Response JSON:
-```json
-{ "beads": ["#C19A6B","#228B22","#228B22", ...] }
-```
-Core logic (in `api/arrange.js`):
-```js
-// build counts from goal ratios
-const beads = buildBracelet(numBeads, ratios.goal, ratios.colors);
-// shuffle (seedable)
-shuffle(beads, seed ? mulberry32(seed) : Math.random);
-res.json({ beads: beads.map(b=>b.color) });
-```
 # My Crystal Bracelet App — Vercel Deployment Guide
 
 ## Table of Contents
@@ -400,6 +373,27 @@ function animateGrow() {
 
 此功能使用户可根据偏好动态调整动画节奏，提升灵活性与趣味性。
 ```
+### 8. Bracelet Arrangement API
+To support external clients, `/api/arrange` generates a randomized bead color list based on target ratios and colors.
+**Request** (POST JSON):
+```json
+{
+  "numBeads": 20,
+  "ratios": { "goal": {"metal":10,...}, "colors": {"metal":"#C19A6B",...} },
+  "seed": 12345  // optional deterministic seed
+}
+```
+**Response**:
+```json
+{ "beads": ["#C19A6B","#228B22",...] }
+```
+**Core Logic** (`api/arrange.js`):
+```js
+const beads = buildBracelet(numBeads, ratios.goal, ratios.colors);
+shuffle(beads, seed ? mulberry32(seed) : Math.random);
+res.json({ beads: beads.map(b=>b.color) });
+```
+
 Below is a concise overview of the final architecture, plus essential code excerpts illustrating the production‑ready solution.
 
 ### 1. Vercel Configuration (`vercel.json`)
