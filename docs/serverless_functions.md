@@ -113,6 +113,33 @@ module.exports = async (req, res) => {
 module.exports.config = { maxDuration:60 };
 ```
 
+## API Endpoint: POST /api/arrange
+File: `api/arrange.js`
+Accepts JSON body:
+```json
+{
+  "numBeads":  number,               // desired bracelet length
+  "ratios": {                         // result from /api/astro
+    "goal":  {"metal":num,...},
+    "colors": {"metal":"#RRGGBB",...}
+  },
+  "seed": optional number            // for deterministic shuffle
+}
+```
+Generates a list of `numBeads` hex colors based on target ratios and recommended colors:
+1. Compute raw counts = `goal[element] * numBeads / 100`.
+2. Floor counts + assign remainders to match total beads.
+3. Build an array of bead colors (`{color:'#RRGGBB'}`) and pad any shortage.
+4. Shuffle with Fisher–Yates; supports optional seed for reproducible order.
+5. Returns:
+```json
+{ "beads": ["#abc123","#fff000", ...] }
+```
+Serverless config for extended timeout:
+```js
+module.exports.config = { maxDuration: 60 };
+```
+
 ## React Frontend Deployment
 - `npm run vercel-build` triggers:
   ```bash
