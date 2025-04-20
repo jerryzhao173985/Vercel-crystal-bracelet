@@ -7,7 +7,7 @@ module.exports = async (req, res) => {
     res.status(405).json({ error: 'Method Not Allowed' });
     return;
   }
-  const { dob, birthTime, gender, deepseekKey, openaiKey } = req.body;
+  const { dob, birthTime, gender, deepseekKey, openaiKey, customPrompt } = req.body;
   if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
     res.status(400).json({ error: 'Missing required parameters' });
     return;
@@ -41,6 +41,10 @@ module.exports = async (req, res) => {
 5. 使用说明：提供佩戴时间、放置方位、配色细节等实用建议。
 
 请用现代白话文分段，格式简洁，术语准确。`;
+
+  // Allow optional override by customPrompt
+  const systemContent = customPrompt && customPrompt.trim() ? customPrompt.trim() : prompt;
+  
   // Call DeepSeek via OpenAI SDK
   let analysisText;
   try {
@@ -48,7 +52,7 @@ module.exports = async (req, res) => {
     const dsRes = await dsClient.chat.completions.create({
       model: 'deepseek-chat',
       messages: [
-        { role: 'system', content: prompt }
+        { role: 'system', content: systemContent }
       ]
     });
     analysisText = dsRes.choices?.[0]?.message?.content;

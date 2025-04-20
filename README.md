@@ -700,6 +700,10 @@ Added a button in the analysis panel to copy both the raw text analysis and stru
 - Disabled the Number of Beads input during animations to avoid conflicts.
 - Buttons for Randomization and Animation repositioned below the bracelet for improved visibility.
 - Resized speed slider remains active during animations for real-time adjustments.
+- Add custom prompt for DeepSeek first-level of astro reading (in api/astro.js)
+
+  **Receive**: JSON body `{ dob, birthTime, gender, deepseekKey, openaiKey, customPrompt? }`.
+  - `customPrompt` (optional): alternate system prompt to DeepSeek for custom analysis.
 
 ---
 
