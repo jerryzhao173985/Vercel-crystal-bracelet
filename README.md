@@ -702,8 +702,9 @@ Added a button in the analysis panel to copy both the raw text analysis and stru
 - Resized speed slider remains active during animations for real-time adjustments.
 - Add custom prompt for DeepSeek first-level of astro reading (in api/astro.js)
 
-  **Receive**: JSON body `{ dob, birthTime, gender, deepseekKey, openaiKey, customPrompt? }`.
-  - `customPrompt` (optional): alternate system prompt to DeepSeek for custom analysis.
+- **Receive**: JSON body `{ dob, birthTime, gender, deepseekKey, openaiKey, customPrompt?, promptType? }`.
+  - `customPrompt` (optional): alternate system prompt for custom analysis, and override the standard deepseek system prompt.
+  - `promptType` (optional): `'basic'` or `'advanced'` to select between two built-in analysis prompt styles.
 
 ---
 

@@ -74,8 +74,9 @@ module.exports = (req, res) => {
 
 ## API Endpoint: POST /api/astro
 File: `api/astro.js`
-1. **Receive**: JSON body `{ dob, birthTime, gender, deepseekKey, openaiKey, customPrompt? }`.
-   - `customPrompt` (optional): an alternate system prompt string. If provided, it overrides the default DeepSeek prompt.
+1. **Receive**: JSON body `{ dob, birthTime, gender, deepseekKey, openaiKey, customPrompt?, promptType? }`.
+   - `customPrompt` (optional): an alternate system prompt string. If provided, it overrides the default DeepSeek prompt entirely.
+   - `promptType` (optional): `'basic'` (default) or `'advanced'` to select one of two built-in prompts.
 2. **DeepSeek Chat**: uses OpenAI SDK with `baseURL='https://api.deepseek.com'` and model `deepseek-chat`.
 3. **Prompt**: instructs DeepSeek to compute 八字 pillars, five-element ratios, plus a personalized hex color for each element.
 4. **Parse**: uses OpenAI Structured Response API (`openai.responses.create`) with JSON schema to extract:
