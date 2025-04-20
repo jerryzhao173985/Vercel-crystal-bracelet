@@ -13,15 +13,17 @@ module.exports = async (req, res) => {
     return;
   }
   // Build Chinese prompt for DeepSeek API with personalized resonance colors
-  const prompt = `你是一位精通五行调节的命理大师，性格开放、灵活可变，不做传统算命，只专注于根据八字分析五行偏颇，并给出精准调节方案。` +
-    `为了与用户八字共振，请为每个五行元素量身定制一个唯一的十六进制颜色(#RRGGBB)，该颜色需在视觉和能量层面显著辅助调节。`
+  const systemPrompt  = `你是一位精通五行调节的命理大师，性格开放、灵活可变，不做传统算命，只专注于根据八字分析五行偏颇，并给出精准调节方案。`
+  const defaultPrompt = `作为融合古典命理学与现代能量疗愈的大师，你精研天干地支能量算法，能基于用户信息深入分析五行短板/过亢问题，通过五行能量解析与视觉化调节，帮助用户建立与自然节律的深层共振。` +
+                        `通过八字识别金木水火土能量偏差，指导运用方位、饮食、饰品进行自我调节，结合现代生活方式设计元素补给及执行方案。` +
+                        `同时为了与用户八字共振，请为每个五行元素量身定制一个唯一的十六进制颜色(#RRGGBB)，该颜色需在视觉和能量层面显著辅助调节。`
     +`
 接收用户输入的八字信息：
 - 性别：${gender === 'male' ? '男' : '女'}
 - 出生日期：${dob}
 - 出生时间：${birthTime}
 
-请按以下流程输出：
+请直接按以下流程输出：
 
 1. 年柱、月柱、日柱、时柱（请计算并列出）。
 
@@ -43,7 +45,7 @@ module.exports = async (req, res) => {
 请用现代白话文分段，格式简洁，术语准确。`;
 
   // Allow optional override by customPrompt
-  const systemContent = customPrompt && customPrompt.trim() ? customPrompt.trim() : prompt;
+  const prompt = customPrompt && customPrompt.trim() ? customPrompt.trim() : defaultPrompt;
   
   // Call DeepSeek via OpenAI SDK
   let analysisText;
@@ -52,7 +54,8 @@ module.exports = async (req, res) => {
     const dsRes = await dsClient.chat.completions.create({
       model: 'deepseek-chat',
       messages: [
-        { role: 'system', content: systemContent }
+        { role: 'system', content: systemPrompt },
+        { role: 'user',   content: prompt }
       ]
     });
     analysisText = dsRes.choices?.[0]?.message?.content;
