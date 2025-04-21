@@ -100,21 +100,26 @@ const userPrompts = {
   advanced: advancedPrompt
 };
 
+// Static prompt templates for discovery (placeholders remain un-interpolated)
+const promptTemplates = {
+  basic: basicPrompt({ dob: '{dob}', birthTime: '{birthTime}', gender: '{gender}' }),
+  advanced: advancedPrompt({ dob: '{dob}', birthTime: '{birthTime}', gender: '{gender}' })
+};
+
 /**
  * Serverless handler: GET /api/prompt
  * Returns mapping of prompt names to template strings (placeholders)
+ */
+/**
+ * GET /api/prompt handler: return static prompt templates with placeholders
  */
 function handler(req, res) {
   if (req.method !== 'GET') {
     res.status(405).json({ error: 'Method Not Allowed' });
     return;
   }
-  // Build placeholder templates
-  const templates = {};
-  for (const key of promptTypes) {
-    templates[key] = userPrompts[key]({ dob:'{dob}', birthTime:'{birthTime}', gender:'{gender}' });
-  }
-  res.status(200).json(templates);
+  // Return raw prompt templates with placeholders
+  res.status(200).json(promptTemplates);
 }
 
 // Attach definitions for astro.js import
