@@ -731,4 +731,17 @@ The current design is consistent and functionally complete.
 
 ---
 
+## API Usage
 
+```bash
+curl -s -X POST https://crystal-bracelet-customization.vercel.app/api/astro \
+          -H 'Content-Type: application/json' \
+          -d '{
+            "dob": "1990-05-15",
+            "birthTime": "08:30",
+            "gender": "female",
+            "deepseekKey": "'"$DEEPSEEK_API_KEY"'",
+            "openaiKey":   "'"$OPENAI_API_KEY"'",
+            "customPrompt": "repeat my information I give you and then give me analysis and result: {dob} {birthTime} {gender}"
+          }'
+```
