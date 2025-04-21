@@ -151,6 +151,18 @@ module.exports.config = { maxDuration: 60 };
   ```
 - Vercel serves `client/build` as static assets and wires `/api/*` to the serverless functions.
 
+## API Endpoint: GET /api/prompt
+File: `api/prompt.js`
+```js
+// Returns mapping of available prompt templates
+module.exports = (req, res) => {
+  if (req.method !== 'GET') return res.status(405).json({ error:'Method Not Allowed' });
+  const { userPrompts } = require('./prompt');
+  res.status(200).json(promptTemplates);
+};
+module.exports.config = { maxDuration:60 };
+```
+
 ## Key Learnings
 1. **Serverless Functions**: lightweight Node.js handlers automatically scaled by Vercel.
 2. **Structured Output**: OpenAI’s JSON schema enforcement simplifies downstream parsing.

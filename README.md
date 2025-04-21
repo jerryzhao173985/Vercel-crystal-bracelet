@@ -394,6 +394,17 @@ shuffle(beads, seed ? mulberry32(seed) : Math.random);
 res.json({ beads: beads.map(b=>b.color) });
 ```
 
+### 9. Prompt Templates API
+Expose built‑in prompt templates so clients can discover available styles and their content.
+GET `/api/prompt` returns JSON:
+```json
+{
+  "basic": "…{DOB}…{TIME}…",
+  "advanced": "…"
+}
+```
+Clients can fetch this mapping to display or select `promptType` keys.
+
 Below is a concise overview of the final architecture, plus essential code excerpts illustrating the production‑ready solution.
 
 ### 1. Vercel Configuration (`vercel.json`)

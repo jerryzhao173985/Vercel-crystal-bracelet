@@ -1,4 +1,5 @@
 // api/prompt.js
+// Serverless function for GET /api/prompt and in-module prompt definitions
 // Provides named prompt generator functions for the astro endpoint
 // Collection of the user prompts to be chosen for use in astro passed to DeepSeek
 
@@ -11,15 +12,15 @@ const systemPrompt = `你是一位精通五行调节的命理大师，性格开�
  * Basic user prompt: concise, modern energy focus
  * @param {{dob:string, birthTime:string, gender:string}} info
  */
-function basicPrompt(info) {
+function basicPrompt({ dob, birthTime, gender }) {
   return `作为融合古典命理学与现代能量疗愈的大师，你精研天干地支能量算法，能够基于用户信息深入分析五行短板或过亢问题，通过五行能量解析与视觉化调节，帮助用户建立与自然节律的深层共振。
 通过八字识别金木水火土能量偏差，指导运用方位、饮食、饰品进行自我调节，结合现代生活方式设计元素补给及执行方案。
 同时为了与用户八字共振，请为每个五行元素量身定制一个唯一的十六进制颜色(#RRGGBB)，该颜色需在视觉和能量层面显著辅助调节。
 
 接收用户输入的八字信息：
-- 性别：${info.gender === 'male' ? '男' : '女'}
-- 出生日期：${info.dob}
-- 出生时间：${info.birthTime}
+- 性别：${gender === 'male' ? '男' : '女'}
+- 出生日期：${dob}
+- 出生时间：${birthTime}
 
 请直接按以下流程输出：
 
@@ -47,15 +48,15 @@ function basicPrompt(info) {
  * Advanced user prompt: deep dive with conflict highlighting
  * @param {{dob:string, birthTime:string, gender:string}} info
  */
-function advancedPrompt(info) {
+function advancedPrompt({ dob, birthTime, gender }) {
   return `作为融合古典命理学（子平、盲派、调候论）与现代能量疗愈的顾问，你的任务是通过深度五行能量解析与视觉化调节，帮助用户建立与自然节律的深层共振。
 请交叉验证不同流派理论，标注核心矛盾并提供基础与激进方案对比，同时为每个五行元素指定专属十六进制颜色(#RRGGBB)，以实现精准共振。
 
 ---
 接收用户输入的八字信息：
-- 性别：${info.gender === 'male' ? '男' : '女'}
-- 出生日期：${info.dob}
-- 出生时间：${info.birthTime}
+- 性别：${gender === 'male' ? '男' : '女'}
+- 出生日期：${dob}
+- 出生时间：${birthTime}
 
 #### **核心分析路径**
 **1. 能量溯源（专业深度）**
@@ -90,7 +91,40 @@ function advancedPrompt(info) {
 `;
 }
 
-// Exported list of prompt types
+// Supported prompt types
 const promptTypes = ['basic', 'advanced'];
 
-module.exports = { systemPrompt, basicPrompt, advancedPrompt, promptTypes };
+// Map of prompt generation functions
+const userPrompts = {
+  basic: basicPrompt,
+  advanced: advancedPrompt
+};
+
+/**
+ * Serverless handler: GET /api/prompt
+ * Returns mapping of prompt names to template strings (placeholders)
+ */
+function handler(req, res) {
+  if (req.method !== 'GET') {
+    res.status(405).json({ error: 'Method Not Allowed' });
+    return;
+  }
+  // Build placeholder templates
+  const templates = {};
+  for (const key of promptTypes) {
+    templates[key] = userPrompts[key]({ dob:'{dob}', birthTime:'{birthTime}', gender:'{gender}' });
+  }
+  res.status(200).json(templates);
+}
+
+// Attach definitions for astro.js import
+handler.systemPrompt = systemPrompt;
+handler.basicPrompt = basicPrompt;
+handler.advancedPrompt = advancedPrompt;
+handler.promptTypes = promptTypes;
+handler.userPrompts = userPrompts;
+
+// Vercel function config
+handler.config = { maxDuration: 60 };
+
+module.exports = handler;

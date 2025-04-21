@@ -12,12 +12,19 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: 'Missing required parameters' });
     return;
   }
-  // Build Chinese prompt for DeepSeek API with personalized resonance colors
-  const systemPrompt  = `你是一位精通五行调节的命理大师，性格开放、灵活可变，不做传统算命，只专注于根据八字分析五行偏颇，并给出精准调节方案。`;
-  // Select user prompt: custom override > named prompt > basic
-  const prompt = customPrompt && customPrompt.trim()
-    ? customPrompt.trim()
-    : (userPrompts[promptType] || userPrompts.basic);
+
+  // Import prompt definitions
+  const { systemPrompt, userPrompts } = require('./prompt');
+
+  // Determine final prompt: customPrompt overrides; else select named prompt > default to basic
+  let prompt;
+  if (customPrompt && customPrompt.trim()) {
+    prompt = customPrompt.trim();
+  } else {
+    const fn = userPrompts[promptType] || userPrompts.basic;
+    // Generate prompt string by invoking the generator function
+    prompt = fn({ dob, birthTime, gender });
+  }
   
   // Call DeepSeek via OpenAI SDK
   let analysisText;
