@@ -2,6 +2,16 @@
 const fetch = global.fetch || require('node-fetch');
 const OpenAI = require('openai');
 
+// Import prompt definitions
+const { systemPrompt, userPrompts } = require('./prompt');
+
+function fillVars(template, vars) {
+  return template.replace(/\{(\w+)\}/g, (_, key) =>
+    Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : `{${key}}`
+  );
+}
+
+
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method Not Allowed' });
@@ -13,13 +23,11 @@ module.exports = async (req, res) => {
     return;
   }
 
-  // Import prompt definitions
-  const { systemPrompt, userPrompts } = require('./prompt');
-
   // Determine final prompt: customPrompt overrides; else select named prompt > default to basic
   let prompt;
   if (customPrompt && customPrompt.trim()) {
-    prompt = customPrompt.trim();
+    // now you can send: "My Info: {dob} {birthTime} {gender}"
+    prompt = fillVars(customPrompt.trim(), { dob, birthTime, gender });
   } else {
     const fn = userPrompts[promptType] || userPrompts.basic;
     // Generate prompt string by invoking the generator function
