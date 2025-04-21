@@ -18,7 +18,7 @@ function basicPrompt({ dob, birthTime, gender }) {
 同时为了与用户八字共振，请为每个五行元素量身定制一个唯一的十六进制颜色(#RRGGBB)，该颜色需在视觉和能量层面显著辅助调节。
 
 接收用户输入的八字信息：
-- 性别：${gender === 'male' ? '男' : '女'}
+- 性别：${gender}
 - 出生日期：${dob}
 - 出生时间：${birthTime}
 
@@ -54,7 +54,7 @@ function advancedPrompt({ dob, birthTime, gender }) {
 
 ---
 接收用户输入的八字信息：
-- 性别：${gender === 'male' ? '男' : '女'}
+- 性别：${gender}
 - 出生日期：${dob}
 - 出生时间：${birthTime}
 
