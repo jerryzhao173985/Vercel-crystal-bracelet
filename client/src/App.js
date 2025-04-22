@@ -21,6 +21,12 @@ function App() {
   const [gender, setGender] = useState('');
   const [deepseekKey, setDeepseekKey] = useState('');
   const [openaiKey, setOpenaiKey] = useState('');
+  // Prompt settings: built-in or custom prompt
+  const [promptOption, setPromptOption] = useState('default');
+  const [promptType, setPromptType] = useState('basic');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [showPromptSettings, setShowPromptSettings] = useState(false);
+  const [promptTemplates, setPromptTemplates] = useState({});
   const [analysis, setAnalysis] = useState('');
   const [analysisExpanded, setAnalysisExpanded] = useState(false);
   const [ratios, setRatios] = useState(null);
@@ -30,6 +36,18 @@ function App() {
   const [growthAnimating, setGrowthAnimating] = useState(false);
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const speedRef = React.useRef(speedMultiplier);
+  // Fetch prompt templates for built-in prompts
+  useEffect(() => {
+    async function fetchPrompts() {
+      try {
+        const res = await axios.get('/api/prompt');
+        setPromptTemplates(res.data);
+      } catch (err) {
+        console.error('Error fetching prompt templates:', err);
+      }
+    }
+    fetchPrompts();
+  }, []);
 
   // Fetch the bead catalog from the server
   useEffect(() => {
@@ -193,10 +211,69 @@ function App() {
             <label>OpenAI API Key:
               <input type="password" value={openaiKey} onChange={e => setOpenaiKey(e.target.value)} placeholder="输入 OpenAI Key" style={{ width: '100%', padding: 6, marginTop: 4, borderRadius: 4, border: '1px solid #ccc' }}/>
             </label>
+            {/* Prompt Settings Toggle */}
+            <div style={{ marginTop: 8, textAlign: 'left' }}>
+              <button
+                onClick={() => setShowPromptSettings(!showPromptSettings)}
+                style={{ background: 'none', border: 'none', padding: 0, color: '#4a90e2', cursor: 'pointer', fontSize: 14 }}
+              >
+                ⚙️ 提示设置 {showPromptSettings ? '▲' : '▼'}
+              </button>
+            </div>
+            {showPromptSettings && (
+              <div style={{ background: '#f9f9f9', padding: 12, border: '1px solid #ccc', borderRadius: 6, marginTop: 8, textAlign: 'left' }}>
+                <div style={{ marginBottom: 8 }}>
+                  <input
+                    type="radio"
+                    id="defaultPrompt"
+                    name="promptOption"
+                    value="default"
+                    checked={promptOption === 'default'}
+                    onChange={() => setPromptOption('default')}
+                  />
+                  <label htmlFor="defaultPrompt" style={{ marginLeft: 4 }}>内置提示</label>
+                </div>
+                {promptOption === 'default' && (
+                  <div style={{ marginLeft: 16, marginBottom: 8 }}>
+                    <label>选择提示类型:
+                      <select
+                        value={promptType}
+                        onChange={e => setPromptType(e.target.value)}
+                        style={{ marginLeft: 4, padding: 4, borderRadius: 4, border: '1px solid #ccc' }}
+                      >
+                        {Object.keys(promptTemplates).map(key => (
+                          <option key={key} value={key}>{key}</option>
+                        ))}
+                      </select>
+                    </label>
+                  </div>
+                )}
+                <div style={{ marginBottom: 8 }}>
+                  <input
+                    type="radio"
+                    id="customPrompt"
+                    name="promptOption"
+                    value="custom"
+                    checked={promptOption === 'custom'}
+                    onChange={() => setPromptOption('custom')}
+                  />
+                  <label htmlFor="customPrompt" style={{ marginLeft: 4 }}>自定义提示</label>
+                </div>
+                {promptOption === 'custom' && (
+                  <textarea
+                    value={customPrompt}
+                    onChange={e => setCustomPrompt(e.target.value)}
+                    rows={4}
+                    placeholder="输入自定义提示..."
+                    style={{ width: '100%', padding: 6, borderRadius: 4, border: '1px solid #ccc' }}
+                  />
+                )}
+              </div>
+            )}
             <button onClick={async () => {
                 setLoading(true);
                 try {
-                  const res = await axios.post('/api/astro', { dob, birthTime, gender, deepseekKey, openaiKey });
+                  const res = await axios.post('/api/astro', { dob, birthTime, gender, deepseekKey, openaiKey, customPrompt, promptType });
                   setAnalysis(res.data.analysis);
                   setRatios(res.data.ratios);
                 } catch (err) {
