@@ -4,24 +4,28 @@ const vm = require('vm');
 /**
  * Turn a string like "(dob) => new Date(dob).getFullYear()" into a real function,
  * sandboxed so it can *only* see Math, Date and whatever safe globals you expose.
+ * Bad or “void” helpers never register; the try{} catch{} falls back silently.
  */
-function compileHelper(src) {
-  // refuse multi-line or enormous payloads (cheap DOS guard)
-  if (src.length > 500 || src.includes('\n')) {
-    throw new Error('Helper must be a single-line function expression ≤500 chars');
+module.exports = function compileHelper(src = '') {
+  if (typeof src !== 'string' || src.length > 500 || src.includes('\n')) {
+    throw new Error('helper must be a 1-line string ≤500 chars');
   }
 
-  // Build a tiny script: module.exports = (dob)=>...
-  const script = new vm.Script(`module.exports = ${src}`);
+  /* ─── Does it syntactically promise a value? ─────────────────────────
+       a) arrow concise  (dob)=>dob+1
+       b) block with “return”  (x)=>{return x+1}
+  -------------------------------------------------------------------- */
+  const returnsValue =
+    /=>\s*[^({]/.test(src.trim()) ||         // arrow no braces
+    /return\s+/.test(src);                   // explicit return
+  if (!returnsValue) throw new Error('helper must return a value');
 
-  // Expose only innocuous globals
-  const context = vm.createContext({ Math, Date });
+  const wrapped = `module.exports = (${src});`;
+  const ctx = vm.createContext({ module: { exports: {} }, exports: {} });
 
-  const fn = script.runInContext(context, { timeout: 50 });
-
-  if (typeof fn !== 'function') throw new Error('Not a function');
+  new vm.Script(wrapped).runInContext(ctx, { timeout: 20 });
+  const fn = ctx.module.exports;
+  if (typeof fn !== 'function') throw new Error('helper is not a function');
 
   return fn;
-}
-
-module.exports = compileHelper;
+};

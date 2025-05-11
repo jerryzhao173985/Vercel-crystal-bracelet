@@ -1,36 +1,39 @@
 // utils/loadHelperModule.js
 const vm = require('vm');
 
-const MAX_SIZE   = 10_000;                     // 10 KB cap
-const BAD_WORDS  = /require\(|import\s|process\./;
-const SAFE_G     = { Math, Date, Intl };
+const MAX_SIZE = 10_000;
+const BAD_WORD = /require\(|import\s|process\./;
+const SAFE_G   = { Math, Date, Intl };
+
+// Whatever’s left in bag is guaranteed to return … something.
+function returnsSomething(fn) {
+  const s = fn.toString();
+  return /=>\s*[^({]/.test(s) || /return\s+/.test(s);
+}
 
 module.exports = function loadHelperModule(code = '') {
-  if (typeof code !== 'string') code = '';
-  if (code.length > MAX_SIZE || BAD_WORDS.test(code)) return {};   // ignore
+  if (typeof code !== 'string' || code.length > MAX_SIZE || BAD_WORD.test(code)) return {};
 
   const ctx = vm.createContext({ module: { exports: {} }, exports: {}, ...SAFE_G });
 
   try {
-    new vm.Script(code, { filename: 'userHelpers.js' })
-      .runInContext(ctx, { timeout: 50 });
-  } catch {                                 // syntax/runtime error → ignore file
-    return {};
-  }
+    new vm.Script(code, { filename: 'userHelpers.js' }).runInContext(ctx, { timeout: 50 });
+  } catch { return {}; }
 
-  const helpers = {};
+  const bag = {};
 
-  // A) functions explicitly exported
+  // A) explicit module.exports object
   const exp = ctx.module.exports;
   if (exp && typeof exp === 'object') {
-    for (const [k, v] of Object.entries(exp)) if (typeof v === 'function') helpers[k] = v;
+    for (const [k, v] of Object.entries(exp))
+      if (typeof v === 'function' && returnsSomething(v)) bag[k] = v;
   }
 
-  // B) any other top-level bindings that are functions
+  // B) any other top-level functions
   for (const [k, v] of Object.entries(ctx)) {
     if (['module', 'exports'].includes(k)) continue;
-    if (typeof v === 'function' && !(k in helpers)) helpers[k] = v;
+    if (typeof v === 'function' && !(k in bag) && returnsSomething(v)) bag[k] = v;
   }
 
-  return helpers;                 // possibly empty – always safe to merge
+  return bag;         // may be empty – caller merges harmlessly
 };
