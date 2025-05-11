@@ -5,21 +5,29 @@ const OpenAI = require('openai');
 // Import prompt definitions
 const { systemPrompt, userPrompts } = require('./prompt');
 
-// Only these three exact tokens get replaced—nothing else will ever match.
-// extra layer of security to avoid getting unnecessary (passed to CURL POST)
-function fillVars(template, { dob, birthTime, gender }) {
-  return template
-    .replace(/\{dob\}/g, dob)
-    .replace(/\{birthTime\}/g, birthTime)
-    .replace(/\{gender\}/g, gender);
+const vm = require('vm');
+
+function fillVars(template, vars, helpers = {}) {
+  // 0) Reject back-ticks outright (avoid template-literal injection)
+  const safe = template.replace(/`/g, '\\`');
+
+  // 1) {dob}  →  ${dob}
+  const withSlots = safe.replace(/\{(\w+)\}/g, (_, key) => {
+    if (!(key in vars)) throw new Error(`Unknown placeholder {${key}}`);
+    return `\${${key}}`;
+  });
+
+  // 2) {{ expr }}  →  ${ expr }
+  const exprTpl = withSlots.replace(/\{\{([^}]+)}}/g, (_, expr) => `\${${expr.trim()}}`);
+
+  // 3) Compile into a template literal
+  const script = new vm.Script('`' + exprTpl + '`');
+
+  // 4) Sandbox context (only allowed identifiers)
+  const context = vm.createContext({ ...vars, ...helpers });
+
+  return script.runInContext(context, { timeout: 50 });
 }
-
-// function fillVars(template, vars) {
-//   return template.replace(/\{(\w+)\}/g, (_, key) =>
-//     Object.prototype.hasOwnProperty.call(vars, key) ? vars[key] : `{${key}}`
-//   );
-// }
-
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
