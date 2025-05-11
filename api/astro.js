@@ -1,54 +1,96 @@
 // Serverless function for Vercel: Astrology analysis with DeepSeek + OpenAI
+const busboy  = require('busboy');
 const fetch = global.fetch || require('node-fetch');
 const OpenAI = require('openai');
 
 // Import prompt definitions
 const { systemPrompt, userPrompts } = require('./prompt');
 
-const vm = require('vm');
-
-function fillVars(template, vars, helpers = {}) {
-  // 0) Reject back-ticks outright (avoid template-literal injection)
-  const safe = template.replace(/`/g, '\\`');
-
-  // 1) {dob}  →  ${dob}
-  const withSlots = safe.replace(/\{(\w+)\}/g, (_, key) => {
-    if (!(key in vars)) throw new Error(`Unknown placeholder {${key}}`);
-    return `\${${key}}`;
-  });
-
-  // 2) {{ expr }}  →  ${ expr }
-  const exprTpl = withSlots.replace(/\{\{([^}]+)}}/g, (_, expr) => `\${${expr.trim()}}`);
-
-  // 3) Compile into a template literal
-  const script = new vm.Script('`' + exprTpl + '`');
-
-  // 4) Sandbox context (only allowed identifiers)
-  const context = vm.createContext({ ...vars, ...helpers });
-
-  return script.runInContext(context, { timeout: 50 });
-}
+const loadFileHelpers = require('../utils/loadHelperModule');
+const fillVars    = require('../utils/fillVars');
+const compileHelper  = require('../utils/compileHelper');  // your existing inline-helper compiler
+const builtinHelpers     = require('../utils/builtin');        // whatever you already ship
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
     res.status(405).json({ error: 'Method Not Allowed' });
     return;
   }
-  const { dob, birthTime, gender, deepseekKey, openaiKey, customPrompt, promptType } = req.body;
-  if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
-    res.status(400).json({ error: 'Missing required parameters' });
-    return;
+
+  /* --------------------------------------------------------------
+     1)  Accept BOTH  application/json  AND  multipart/form-data
+  -------------------------------------------------------------- */
+  let F = {};           // all non-file fields
+  let fileCode = null;  // JS text from <input name="file">
+
+  if (req.headers['content-type']?.startsWith('multipart/form-data')) {
+    await new Promise((resolve, reject) => {
+      const bb = busboy({ headers: req.headers });
+      bb.on('field', (name, val) => (F[name] = val));
+      bb.on('file',  (name, stream) => {
+        if (name === 'file') {
+          let buf = '';
+          stream.on('data', d => (buf += d.toString('utf8')));
+          stream.on('end', () => (fileCode = buf));
+        } else stream.resume();
+      });
+      bb.on('finish', resolve);
+      bb.on('error',  reject);
+      req.pipe(bb);
+    });
+  } else {
+    F = req.body;                         // Express JSON middleware filled this
+    if (F.file && typeof F.file === 'string') {
+      // client sent base-64 in JSON
+      try { fileCode = Buffer.from(F.file, 'base64').toString('utf8'); } catch { /* ignore */ }
+    }
   }
+
+  const { dob, birthTime, gender, deepseekKey, openaiKey,
+          customPrompt, promptType = 'basic',
+          helpers: inline = {}, fileURL } = F;
+
+  if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
+    return res.status(400).json({ error:'missing dob, birthTime, gender, deepseekKey, or openaiKey' });
+  }
+
+  /* --------------------------------------------------------------
+     2)  Assemble helpers  (fail-soft at every step)
+  -------------------------------------------------------------- */
+  const helpers = { ...builtinHelpers };
+
+  // 2-a inline tiny helpers  {"age":"(dob)=>…"}
+  if (inline && typeof inline === 'object') {
+    for (const [k, code] of Object.entries(inline)) {
+      try { helpers[k] = compileHelper(code); } catch {/* skip bad */ }
+    }
+  }
+
+  // 2-b helper JS file uploaded
+  if (fileCode) Object.assign(helpers, loadFileHelpers(fileCode));
+
+  // 2-c helper JS via HTTPS URL
+  if (fileURL && /^https:\/\//.test(fileURL)) {
+    try {
+      const txt = await fetch(fileURL, { timeout: 5_000 }).then(r => r.text());
+      Object.assign(helpers, loadFileHelpers(txt));
+    } catch {/* fetch error ⇒ ignore */}
+  }
+
+  /* --------------------------------------------------------------
+     3)  Produce the prompt
+  -------------------------------------------------------------- */
+  const vars = { dob, birthTime, gender };
 
   // Determine final prompt: customPrompt overrides; else select named prompt > default to basic
   let prompt;
   if (customPrompt && customPrompt.trim()) {
     // customPrompt can now use {dob}, {birthTime}, {gender}, e.g. "My Info: {dob} {birthTime} {gender}"
-    prompt = fillVars(customPrompt.trim(), { dob, birthTime, gender });
+    prompt = fillVars(customPrompt.trim(), vars, helpers);
   } else {
     const fn = userPrompts[promptType] || userPrompts.basic;
     // Generate prompt string by invoking the generator function
-    prompt = fn({ dob, birthTime, gender });
+    prompt = fn(vars);
   }
   
   // Call DeepSeek via OpenAI SDK

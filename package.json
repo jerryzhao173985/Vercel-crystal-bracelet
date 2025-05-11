@@ -9,6 +9,7 @@
     "vercel-build": "cd client && npm install && npm run build"
   },
   "dependencies": {
+    "busboy": "^1.6.0",
     "concurrently": "^8.0.1",
     "express": "^4.18.2",
     "openai": "^4.5.0"
