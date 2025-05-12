@@ -9,6 +9,7 @@ function evalExpr(expr, ctx) {
   try {
     const val = new vm.Script(expr).runInContext(ctx, { timeout: 20 });
     if (val === undefined) return `{{${expr}}}`;               // ignore void helpers
+    if (val instanceof Date) return val.toISOString().slice(0,10);  // prettier Date
     return typeof val === 'object' ? JSON.stringify(val) : String(val);
   } catch {                                                    // unknown helper / divide-by-zero / etc.
     return `{{${expr}}}`;                                      // any error → untouched // keep placeholder so user sees what failed
