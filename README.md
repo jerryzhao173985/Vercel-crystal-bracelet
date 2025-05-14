@@ -745,3 +745,56 @@ curl -s -X POST https://crystal-bracelet-customization.vercel.app/api/astro \
             "customPrompt": "repeat my information I give you and then give me analysis and result: {dob} {birthTime} {gender}"
           }'
 ```
+
+---
+
+## Helper functions (async - May 14)
+
+### Asynchronous helper via uploaded file
+
+```bash
+# openai.js contains callOpenAI / generateFatePrompt / analyzeFatePipeline
+curl -X POST [https://your-app.vercel.app/api/astro](https://your-app.vercel.app/api/astro) \
+ -H 'Content-Type: multipart/form-data' \
+ -F file=@openai.js \
+ -F customPrompt='Fate:\n{{ analyzeFatePipeline("2000-01-01","10:00","male") }}'
+```
+
+> Fate:
+> ( here you’ll see GPT-4o’s paragraph … )
+> 
+
+### Inline OpenAI ask (arrow helper)
+
+```bash
+curl -X POST https://…/api/astro \
+ -H 'Content-Type: application/json' \
+ -d '{
+   "helpers": {
+     "ask": "(q)=> (async()=> (await (await fetch(\"[https://api.openai.com/v1/completions](https://api.openai.com/v1/completions)\",{method:\"POST\",headers:{Authorization:`Bearer ${process.env.OPENAI_KEY}`,\"Content-Type\":\"application/json\"},body:JSON.stringify({model:\"gpt-4o\",prompt:q,max_tokens:30})})).json()).choices[0].text.trim())()"
+   },
+   "customPrompt":"{{ ask(\"Say hi\") }}"
+ }'
+```
+
+> Prompt → Hi there!
+> 
+
+---
+
+### Why the {{...}} placeholders will still stay literal sometimes
+| Cause | What you’ll see | Why & remedy |
+|---|---|---|
+| function returns undefined | {{ myHelper(...) }} | helper forgot return. |
+| throws inside VM (syntax, timeout, fetch 401) | same literal | check server logs. |
+| expression >30 s runtime | literal | raise timeout in evalExpr. |
+All other cases now interpolate, including nested braces and async.
+
+---
+
+### Support for async calls
+ * Node vm can execute and return Promises; you must await them to get the value
+ * Wrapping the user expression in (async()=>… )() is the simplest top-level-await shim
+ * The VM timeout guards against runaway or stalled network calls
+ * Vercel Functions allow outbound Workspace but count it toward execution time, so keeping the 10 s cap is sensible
+With these two code tweaks you can safely (and synchronously) embed any await fetch(...) logic inside {{ … }}.

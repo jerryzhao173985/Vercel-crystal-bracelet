@@ -1,29 +1,36 @@
 // utils/fillVars.js
 const vm = require('vm');
 
-const COMMON = { Math, Date, Intl, console, fetch }; // fetch is global in Node18+
+const COMMON = { Math, Date, Intl, console, fetch, require };
 
-function stringify(val) {
-  if (val === undefined) return undefined;
+function toString(val) {
+  if (val === undefined) return undefined;        // trigger "leave literal"
   if (val instanceof Date) return val.toISOString().slice(0, 10);
   if (typeof val === 'object') return JSON.stringify(val);
   return String(val);
 }
 
 // evalExpr now ASYNC – supports await inside helpers
-async function evalExprAsync(expr, ctx) {
+async function evalExpr(expr, ctx) {
   try {
+    // wrap so top-level await works
     const wrapped = `(async () => (${expr}))()`; // arrow preserves "this"
-    const result = await new vm.Script(wrapped).runInContext(ctx, { timeout: 10_000 });
-    const s = stringify(result);
+    // Timeout bumped to 30 s for long (OpenAI) calls
+    let result = await new vm.Script(wrapped).runInContext(ctx, { timeout: 30_000 });
+
+    // second await if expression returns a promise
+    if (result && typeof result.then === 'function')
+      result = await result;
+
+    const s = toString(result);
     return s === undefined ? `{{${expr}}}` : s;
   } catch {
-    return `{{${expr}}}`; // leave literal on any error
+    return `{{${expr}}}`;         // leave placeholder if anything blows up
   }
 }
 
 // walk template, collect balanced {{ … }}
-async function renderAsync(tpl, ctx) {
+async function render(tpl, ctx) {
   let out = '';
   for (let i = 0; i < tpl.length; ) {
     const open = tpl.indexOf('{{', i);
@@ -42,7 +49,7 @@ async function renderAsync(tpl, ctx) {
     if (j >= tpl.length) { out += tpl.slice(open); break; }
 
     const expr = tpl.slice(open + 2, j).trim();
-    out += await evalExprAsync(expr, ctx);
+    out += await evalExpr(expr, ctx);
     i = j + 2;
   }
   return out;
@@ -62,8 +69,8 @@ module.exports = async function fillVars(template, vars, helpers = {}) {
   txt = txt.replace(/\{(\w+)\}/g, (_, k) => (k in vars ? vars[k] : `{${k}}`));
 
   // 2) build context (inherit safeRequire + fetch from parent)
-  const ctx = vm.createContext({ ...COMMON, ...vars, ...helpers, require });
+  const ctx = vm.createContext({ ...COMMON, ...vars, ...helpers });
 
   // 3) async render
-  return await renderAsync(txt, ctx);
+  return await render(txt, ctx);
 };
