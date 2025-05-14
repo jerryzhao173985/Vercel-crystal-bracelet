@@ -86,7 +86,7 @@ module.exports = async (req, res) => {
   let prompt;
   if (customPrompt && customPrompt.trim()) {
     // customPrompt can now use {dob}, {birthTime}, {gender}, e.g. "My Info: {dob} {birthTime} {gender}"
-    prompt = fillVars(customPrompt.trim(), vars, helpers);
+    prompt = await fillVars(customPrompt.trim(), vars, helpers);
   } else {
     const fn = userPrompts[promptType] || userPrompts.basic;
     // Generate prompt string by invoking the generator function

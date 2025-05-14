@@ -101,6 +101,18 @@ curl -X POST https://crystal-bracelet-customization.vercel.app/api/astro \
   }'
 ```
 
+Note that here for a string "month" to be put in the closure data block of -d '{}' we need to escape the \".
+
+output
+
+```bash
+-d '{...
+    "customPrompt":"Just Repeat the following input I gave you straightly afterwards back to me without doing anything else please:\n现在年龄：{{ age(dob) }}\\n再过 100 天是：{{ deltaDate(new Date(dob),100,0,0) }}\\n三个月后 (moment-style)：{{ deltaDateMomentJs(new Date(dob),3,\"months\") }}"
+  }'
+
+{"analysis":"现在年龄：35\\n再过 100 天是：1990-05-31\\n三个月后 (moment-style)：1990-08-15","ratios":{"current":{"metal":28,"wood":17,"water":22,"
+```
+
 ## 5. Multipart/form-data upload of helper file (megaHelpers.js) -- load user functions from a local file (using UX format)
 
 ```bash
