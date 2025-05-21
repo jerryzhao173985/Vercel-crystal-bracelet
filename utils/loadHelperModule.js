@@ -105,15 +105,29 @@ module.exports = function loadHelperModule(code = '', options = {}) {
     }
   }
   
+  // Implement cache size limit to prevent memory growth
+  const MAX_CACHE_ENTRIES = 100;
+  
+  // Initialize global cache if it doesn't exist
+  if (!global.__helperCache) {
+    global.__helperCache = {};
+  }
+  
+  // Check cache size regardless of whether this call uses caching
+  // This ensures cache doesn't grow unbounded even when some callers use disableCache
+  const cacheKeys = Object.keys(global.__helperCache);
+  if (cacheKeys.length >= MAX_CACHE_ENTRIES) {
+    // Use a random index to avoid thrashing frequently used entries
+    const randomIndex = Math.floor(Math.random() * cacheKeys.length);
+    delete global.__helperCache[cacheKeys[randomIndex]];
+  }
+  
   // Cache helpers using content hash for performance
   const contentHash = crypto.createHash('sha256').update(code).digest('hex');
   const cacheKey = `helper_${contentHash}`;
   
-  // Implement cache size limit to prevent memory growth
-  const MAX_CACHE_ENTRIES = 100;
-  
   // Check module cache unless disabled
-  if (!disableCache && global.__helperCache && global.__helperCache[cacheKey]) {
+  if (!disableCache && global.__helperCache[cacheKey]) {
     return global.__helperCache[cacheKey];
   }
   
@@ -167,16 +181,6 @@ module.exports = function loadHelperModule(code = '', options = {}) {
   
   // Cache the result for future use unless caching is disabled
   if (!disableCache) {
-    if (!global.__helperCache) global.__helperCache = {};
-    
-    // When cache is full, remove a random entry to prevent predictable eviction
-    const cacheKeys = Object.keys(global.__helperCache);
-    if (cacheKeys.length >= MAX_CACHE_ENTRIES) {
-      // Use a random index to avoid thrashing frequently used entries
-      const randomIndex = Math.floor(Math.random() * cacheKeys.length);
-      delete global.__helperCache[cacheKeys[randomIndex]];
-    }
-    
     // Add timestamp to entry to potentially implement LRU in the future
     bag._cacheTimestamp = Date.now();
     global.__helperCache[cacheKey] = bag;

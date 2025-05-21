@@ -181,17 +181,30 @@ async function runInSecureContext(code, globals = {}, options = {}) {
       const controller = new AbortController();
       const { signal } = controller;
       
-      // Create a timeout promise with proper cleanup
+      // Create a timeout promise with robust cleanup
       const timeoutPromise = new Promise((_, reject) => {
-        const id = setTimeout(() => {
-          // First abort the controller, which will trigger the cleanup listener
-          controller.abort(); 
-          // Then reject the promise
+        let timeoutId = setTimeout(() => {
+          // Clear the timeout ID first to prevent any race conditions
+          const tid = timeoutId;
+          timeoutId = null;
+          
+          // Then abort the controller, which will trigger any other cleanup
+          controller.abort();
+          
+          // Finally reject the promise with a descriptive error
           reject(new Error(`Async execution timed out after ${timeout}ms`));
+          
+          // Extra safety: ensure the timeout is cleared in case the abort listener fails
+          clearTimeout(tid);
         }, timeout);
         
-        // Ensure the timer is cleared if promise completes or errors
-        signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+        // Auto-cleanup when abort is called from any source
+        signal.addEventListener('abort', () => {
+          if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+          }
+        }, { once: true });
       });
       
       try {
@@ -281,15 +294,30 @@ async function runSecureFunction(fn, args = [], options = {}) {
   const controller = new AbortController();
   const { signal } = controller;
   
-  // Create a timeout promise that properly cleans up when complete
+  // Create a timeout promise with robust cleanup
   const timeoutPromise = new Promise((_, reject) => {
-    const id = setTimeout(() => {
-      controller.abort(); // First abort to trigger cleanup
+    let timeoutId = setTimeout(() => {
+      // Clear the timeout ID first to prevent any race conditions
+      const tid = timeoutId;
+      timeoutId = null;
+      
+      // Then abort the controller, which will trigger any other cleanup
+      controller.abort();
+      
+      // Finally reject the promise with a descriptive error
       reject(new Error(`Function execution timed out after ${timeout}ms`));
+      
+      // Extra safety: ensure the timeout is cleared in case the abort listener fails
+      clearTimeout(tid);
     }, timeout);
     
-    // Auto-cleanup when abort is called
-    signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+    // Auto-cleanup when abort is called from any source
+    signal.addEventListener('abort', () => {
+      if (timeoutId) {
+        clearTimeout(timeoutId);
+        timeoutId = null;
+      }
+    }, { once: true });
   });
   
   // Execute the function with timeout

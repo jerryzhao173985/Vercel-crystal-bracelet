@@ -6,13 +6,11 @@ const OpenAI = require('openai');
 // Import prompt definitions
 const { systemPrompt, userPrompts } = require('./prompt');
 
-// Import enhanced error handling utilities at the top level
-const { handleApiError, ValidationError, withTimeout, debugError } = require('../utils/errorHandler');
+// Import enhanced error handling utilities from centralized utils
+const { handleApiError, ValidationError, withTimeout, debugError } = require('../utils');
 
-const loadFileHelpers = require('../utils/loadHelperModule');
-const fillVars    = require('../utils/fillVars');
-const compileHelper  = require('../utils/compileHelper');  // your existing inline-helper compiler
-const builtinHelpers     = require('../utils/builtin');        // whatever you already ship
+// Import remaining utilities from centralized utils
+const { loadHelperModule: loadFileHelpers, fillVars, compileHelper, builtinHelpers } = require('../utils');
 
 module.exports = async (req, res) => {
   try {

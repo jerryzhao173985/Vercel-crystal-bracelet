@@ -70,8 +70,9 @@ function toString(val) {
   return String(val);
 }
 
-// Enhanced error handling utilities
-const { formatConsoleError, TimeoutError } = require('./errorHandler');
+// Import core error handling utilities directly to avoid circular dependencies
+const errorHandlerCore = require('./errorHandler');
+const { formatConsoleError, TimeoutError } = errorHandlerCore;
 
 // evalExpr now ASYNC with enhanced error classification and suggestions
 async function evalExpr(expr, ctx, options = {}) {
@@ -88,8 +89,8 @@ async function evalExpr(expr, ctx, options = {}) {
     // Use the cached script
     const script = expressionCache.get(expr);
     
-    // Import withTimeout to properly handle timeout for the whole execution
-    const { withTimeout } = require('./errorHandler');
+    // Use withTimeout from the imported errorHandlerCore
+    const { withTimeout } = errorHandlerCore;
     
     // Execute with timeout protection using our withTimeout utility
     // This ensures the entire execution is properly timed out, not just the sync part
@@ -105,17 +106,32 @@ async function evalExpr(expr, ctx, options = {}) {
         const controller = new AbortController();
         const { signal } = controller;
         
-        // Create a timeout promise with proper cleanup
+        // Create a timeout promise with robust cleanup
         const timeoutPromise = new Promise((_, reject) => {
-          const id = setTimeout(() => {
+          let timeoutId = setTimeout(() => {
+            // Clear the timeout ID first to prevent any race conditions
+            const tid = timeoutId;
+            timeoutId = null;
+            
+            // Then reject with detailed error info
             reject(new TimeoutError(`Promise execution timed out after 30000ms`, {
               suggestion: 'Your async operation took too long. Consider optimizing network calls or breaking complex operations into smaller parts.'
             }));
-            controller.abort(); // Signal abortion to any listeners
+            
+            // Finally abort the controller to signal to any cleanup listeners
+            controller.abort();
+            
+            // Extra safety: ensure the timeout is cleared in case the abort listener fails
+            clearTimeout(tid);
           }, 30_000);
           
-          // Ensure the timer is cleared if promise completes or errors
-          signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+          // Auto-cleanup when abort is called from any source
+          signal.addEventListener('abort', () => {
+            if (timeoutId) {
+              clearTimeout(timeoutId);
+              timeoutId = null;
+            }
+          }, { once: true });
         });
         
         // Race the actual promise against the timeout

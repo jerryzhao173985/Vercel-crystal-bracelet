@@ -194,12 +194,22 @@ class TimeoutError extends Error {
  */
 function createTimeout(ms) {
   let timeoutId;
+  
+  // Create a promise that rejects with a detailed timeout error
   const promise = new Promise((_, reject) => {
     timeoutId = setTimeout(() => {
+      // First store the timeout ID and null it to prevent race conditions
+      const tid = timeoutId;
+      timeoutId = null;
+      
+      // Then reject with detailed error info
       reject(new TimeoutError(`Operation timed out after ${ms}ms`, {
         suggestion: `Your operation exceeded the ${ms}ms timeout. Consider optimizing your code or breaking it into smaller parts.`,
         timeoutDuration: ms
       }));
+      
+      // Extra safety: ensure timeout is cleared
+      clearTimeout(tid);
     }, ms);
   });
   
@@ -207,7 +217,7 @@ function createTimeout(ms) {
   const cleanup = () => {
     if (timeoutId) {
       clearTimeout(timeoutId);
-      timeoutId = undefined;
+      timeoutId = null;
     }
   };
   
