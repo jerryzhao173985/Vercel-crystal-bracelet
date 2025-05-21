@@ -807,30 +807,38 @@ The JavaScript sandbox and template processing engine have been significantly en
    - Implemented prototype freezing and access restrictions
    - Added input validation and sanitization
    - Improved error handling with detailed reports
+   - Added WeakSet-based cycle detection for recursive objects
+   - Implemented proper sandboxing with VM context isolation
 
 2. **Performance Optimizations**
-   - Expression caching for frequently used templates
-   - Module caching via content hashing
+   - LRU expression caching for frequently used templates
+   - Module caching via content hashing with size-limited random eviction
    - Streamlined context creation and reuse
-   - Improved string parsing algorithm
+   - Improved balanced-brace depth-parser for complex nested object/array literals
+   - Adaptive iteration limits based on template size
 
 3. **Robust Error Handling**
-   - Formatted error messages for debugging
-   - Detailed error reporting for syntax issues
-   - Timeout management for long-running operations
-   - Exception boundaries to prevent cascading failures
+   - Formatted error messages with examples for better debugging
+   - Detailed error reporting for syntax issues and security violations
+   - AbortController-based timeout management for async operations
+   - Exception boundaries with proper cleanup to prevent memory leaks
+   - Centralized error handling with stack trace capture
 
 4. **Enhanced Template Features**
-   - Better async/await support
-   - Improved string handling 
+   - Full async/await support with proper Promise resolution
+   - Improved string handling and escaping
    - Advanced depth tracking for nested templates
    - Additional utility helpers for common operations
+   - Support for complex object literals and array expressions
 
-### Support for Async Calls
- * Node vm can execute and return Promises; you must await them to get the value
- * Wrapping the user expression in (async()=>… )() enables top-level await functionality
- * VM timeout settings guard against runaway or stalled network calls
- * Vercel Functions support outbound network requests within execution time limits
- * The enhanced error handling provides better reporting for async failures
+### Support for Async Operations in Templates
+* Node VM module can execute and return Promises, properly awaited for final values
+* Expressions are wrapped in async IIFEs (async()=>...)() to enable top-level await 
+* AbortController provides proper timeout control with resource cleanup
+* Double Promise resolution ensures proper handling of Promise-returning expressions
+* Vercel Functions support outbound network requests with extended timeouts (up to 60s)
+* Enhanced error handling with detailed reports for async failures
 
-With these improvements, you can now safely embed async operations including `fetch()` inside template expressions {{ … }} with proper error handling and timeouts.
+For detailed documentation of all security enhancements, see [docs/patches/feature-sandbox-security-enhancements.md](docs/patches/feature-sandbox-security-enhancements.md)
+
+With these improvements, you can now safely embed async operations including `fetch()` inside template expressions {{ … }} with proper error handling, resource management, and timeouts.
