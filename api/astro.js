@@ -6,8 +6,8 @@ const OpenAI = require('openai');
 // Import prompt definitions
 const { systemPrompt, userPrompts } = require('./prompt');
 
-// Import error handling utilities at the top level
-const { handleApiError, ValidationError, withTimeout } = require('../utils/errorHandler');
+// Import enhanced error handling utilities at the top level
+const { handleApiError, ValidationError, withTimeout, debugError } = require('../utils/errorHandler');
 
 const loadFileHelpers = require('../utils/loadHelperModule');
 const fillVars    = require('../utils/fillVars');
@@ -51,7 +51,10 @@ module.exports = async (req, res) => {
 
     const { dob, birthTime, gender, deepseekKey, openaiKey,
             customPrompt, promptType = 'basic',
-            helpers: inline = {}, fileURL } = F;
+            helpers: inline = {}, fileURL, debug } = F;
+            
+    // Enhanced debugging mode - controlled by query param or body field
+    const debugMode = debug === 'true' || debug === true;
 
     // Validate required fields
     if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
@@ -118,13 +121,30 @@ module.exports = async (req, res) => {
 
     // Determine final prompt: customPrompt overrides; else select named prompt > default to basic
     let prompt;
-    if (customPrompt && customPrompt.trim()) {
-      // customPrompt can now use {dob}, {birthTime}, {gender}, e.g. "My Info: {dob} {birthTime} {gender}"
-      prompt = await fillVars(customPrompt.trim(), vars, helpers);
-    } else {
-      const fn = userPrompts[promptType] || userPrompts.basic;
-      // Generate prompt string by invoking the generator function
-      prompt = fn(vars);
+    try {
+      if (customPrompt && customPrompt.trim()) {
+        // customPrompt can now use {dob}, {birthTime}, {gender}, e.g. "My Info: {dob} {birthTime} {gender}"
+        // Pass debug mode to enhance error reporting
+        prompt = await fillVars(customPrompt.trim(), vars, helpers, { 
+          debugMode: debugMode,
+          detectMissingVars: true
+        });
+      } else {
+        const fn = userPrompts[promptType] || userPrompts.basic;
+        // Generate prompt string by invoking the generator function
+        prompt = fn(vars);
+      }
+    } catch (templateError) {
+      console.error('Template processing error:', templateError.message);
+      
+      // In debug mode, provide detailed error information with suggestions
+      if (debugMode) {
+        return res.status(400).json(
+          debugError(templateError, customPrompt, vars)
+        );
+      }
+      
+      throw templateError; // Will be caught by the outer try-catch
     }
     
     // Call DeepSeek via OpenAI SDK
@@ -290,14 +310,18 @@ module.exports = async (req, res) => {
       meta: {
         timestamp: new Date().toISOString(),
         processingTime,
-        version: '2.0.0' // API version after security and performance enhancements
+        debugMode, // Indicate if debug mode was enabled
+        version: '2.1.0' // API version after enhanced error handling improvements
       }
     });
   } catch (error) {
-    // Handle any other errors that might have been missed
-    return handleApiError(error, res, { 
+    // Handle any other errors that might have been missed with enhanced error handling
+    return handleApiError(error, res, {
       statusCode: error.statusCode || 500,
-      includeStack: process.env.NODE_ENV !== 'production'
+      includeStack: process.env.NODE_ENV !== 'production',
+      context: customPrompt || '',
+      includeSuggestions: true,
+      verbose: debugMode // Include enhanced error information in debug mode
     });
   }
 };

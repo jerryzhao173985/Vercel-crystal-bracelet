@@ -70,8 +70,13 @@ function toString(val) {
   return String(val);
 }
 
-// evalExpr now ASYNC – supports await inside helpers with improved error handling
-async function evalExpr(expr, ctx) {
+// Enhanced error handling utilities
+const { formatConsoleError, TimeoutError } = require('./errorHandler');
+
+// evalExpr now ASYNC with enhanced error classification and suggestions
+async function evalExpr(expr, ctx, options = {}) {
+  const { debugMode = false } = options;
+  
   try {
     // Cache compiled scripts for performance
     if (!expressionCache.has(expr)) {
@@ -96,7 +101,9 @@ async function evalExpr(expr, ctx) {
         // Create a timeout promise with proper cleanup
         const timeoutPromise = new Promise((_, reject) => {
           const id = setTimeout(() => {
-            reject(new Error(`Promise execution timed out after 30000ms`));
+            reject(new TimeoutError(`Promise execution timed out after 30000ms`, {
+              suggestion: 'Your async operation took too long. Consider optimizing network calls or breaking complex operations into smaller parts.'
+            }));
             controller.abort(); // Signal abortion to any listeners
           }, 30_000);
           
@@ -110,7 +117,18 @@ async function evalExpr(expr, ctx) {
           timeoutPromise
         ]);
       } catch (promiseError) {
+        // Enhanced error handling with classification and suggestions
         console.error(`Promise error in expression "${expr}": ${promiseError.message}`);
+        
+        // Generate user-friendly error message with suggestions if in debug mode
+        if (debugMode) {
+          const formattedError = formatConsoleError(promiseError, { 
+            context: expr,
+            colorOutput: false 
+          });
+          return `{{Error: ${promiseError.message}\n\nSuggestions: ${formattedError.split('\n')[0]}}}`; 
+        }
+        
         return `{{Error: ${promiseError.message}}}`; // Return formatted error
       }
     }
@@ -118,13 +136,29 @@ async function evalExpr(expr, ctx) {
     const s = toString(result);
     return s === undefined ? `{{${expr}}}` : s;
   } catch (error) {
+    // Enhanced error handling with classification and suggestions
     console.error(`Error evaluating "${expr}": ${error.message}`);
+    
+    // Generate user-friendly error message with suggestions if in debug mode
+    if (debugMode) {
+      const formattedError = formatConsoleError(error, { 
+        context: expr,
+        colorOutput: false 
+      });
+      
+      return `{{Error: ${error.message}
+Suggestion: ${error.suggestion || 'Check syntax and variable names.'}
+Examples: ${error.examples ? `Bad: ${error.examples.bad}, Good: ${error.examples.good}` : 'N/A'}
+}}`;
+    }
+    
     return `{{Error: ${error.message}}}`; // Return formatted error message instead of original expression
   }
 }
 
 // Token-based template parser that handles nested expressions and provides detailed errors
 async function render(tpl, ctx, options = {}) {
+  const { debugMode = false } = options;
   let out = '';
   let i = 0;
   // Calculate a reasonable iteration limit based on template size
@@ -173,9 +207,16 @@ async function render(tpl, ctx, options = {}) {
         j++;
       }
       
-      // Handle unclosed expression
-      if (j >= tpl.length) { 
-        out += `{{Error: Unclosed expression starting at position ${open}}}`;
+      // Handle unclosed expression with enhanced error
+      if (j >= tpl.length) {
+        const errorMessage = debugMode ? 
+          `{{Error: Unclosed expression starting at position ${open}.
+Suggestion: Check for missing closing braces '}}'. Every opening '{{' must have a matching '}}' pair.
+Example: Bad: {{Math.max(1, 2)  Good: {{Math.max(1, 2)}}
+}}` :
+          `{{Error: Unclosed expression starting at position ${open}}}`;
+        
+        out += errorMessage;
         break; 
       }
       
@@ -187,33 +228,60 @@ async function render(tpl, ctx, options = {}) {
       if (expr.includes('{{')) {
         try {
           // Process inner templates first
-          expr = await render(expr, ctx);
+          expr = await render(expr, ctx, { debugMode });
         } catch (nestedError) {
-          out += `{{Error: Failed to process nested template: ${nestedError.message}}}`;
+          // Enhanced error for nested templates
+          const nestedErrorMsg = debugMode ?
+            formatConsoleError(nestedError, { context: expr, colorOutput: false }) :
+            nestedError.message;
+            
+          out += `{{Error: Failed to process nested template: ${nestedErrorMsg}}}`;
           i = j + 2;
           continue;
         }
       }
 
-      // Then evaluate the expression
-      const result = await evalExpr(expr, ctx);
+      // Then evaluate the expression with debug mode if needed
+      const result = await evalExpr(expr, ctx, { debugMode });
       out += result;
       i = j + 2;
     }
     
     if (iterations >= maxIterations) {
-      return `{{Error: Template processing exceeded ${maxIterations} iterations (template length: ${tpl.length}) - possible infinite loop or very complex template}}`;
+      const errorMessage = debugMode ?
+        `{{Error: Template processing exceeded ${maxIterations} iterations.
+Suggestion: Your template may contain an infinite loop or is extremely complex. Check for circular references or self-replacing patterns.
+Example: Bad: {{var}} where var='{{var}}' (self-reference)  Good: {{var}} where var has a final value
+}}` :
+        `{{Error: Template processing exceeded ${maxIterations} iterations (template length: ${tpl.length}) - possible infinite loop or very complex template}}`;
+        
+      return errorMessage;
     }
     
     return out;
   } catch (error) {
+    // Enhanced error handling with classification and suggestions
     console.error(`Template rendering error: ${error.message}`);
+    
+    if (debugMode) {
+      const formattedError = formatConsoleError(error, {
+        context: tpl.substring(0, 100) + (tpl.length > 100 ? '...' : ''),
+        colorOutput: false
+      });
+      
+      return `{{Error in template rendering: ${error.message}
+Suggestion: ${error.suggestion || 'Check your template syntax for errors.'}
+}}`;
+    }
+    
     return `{{Error in template rendering: ${error.message}}}`;
   }
 }
 
 /**
  * Enhanced template engine that fills variables and evaluates expressions safely
+ * with improved error handling and user guidance
+ * 
  * @param {string} template - raw prompt with {dob} and {{ … }}
  * @param {object} vars - { dob, birthTime, gender }
  * @param {object} helpers - merged helper functions (must return non-void)
@@ -230,7 +298,8 @@ module.exports = async function fillVars(template, vars, helpers = {}, options =
   const {
     maxRenderDepth = 10,      // Max recursive rendering depth
     clearCache = false,       // Option to clear the expression cache
-    debugMode = false         // Enable detailed error reporting
+    debugMode = false,        // Enable detailed error reporting
+    detectMissingVars = true  // Detect and report missing variables
   } = options;
   
   // Clear cache if requested
@@ -239,14 +308,36 @@ module.exports = async function fillVars(template, vars, helpers = {}, options =
   // 0) escape stray back-ticks
   let txt = template.replace(/`/g, '\\`');
 
-  // 1) simple placeholders {dob} {birthTime}…
+  // 1) simple placeholders {dob} {birthTime}… with enhanced error reporting
+  const missingVars = new Set();
   txt = txt.replace(/\{([\w]+)\}/g, (match, k) => {
     if (k in vars) {
       const val = vars[k];
       return val !== undefined && val !== null ? String(val) : '';
     }
-    return debugMode ? `{${k}?}` : match; // Mark unknown variables in debug mode
+    
+    // Track missing variables
+    if (detectMissingVars) {
+      missingVars.add(k);
+    }
+    
+    // Provide guidance for missing variables in debug mode
+    return debugMode ? `{${k}?}` : match; 
   });
+  
+  // Warn about missing variables if in debug mode
+  if (debugMode && missingVars.size > 0) {
+    const missingVarsList = Array.from(missingVars).join(', ');
+    console.warn(`Template references undefined variables: ${missingVarsList}`);
+    
+    // Add warning to template output in debug mode
+    if (missingVars.size > 0) {
+      txt = `{{Warning: Missing variables: ${missingVarsList}.
+Suggestion: Make sure all needed variables are provided in the context.
+Examples: If using {dob}, make sure 'dob' is in the vars object.
+}}\n\n` + txt;
+    }
+  }
 
   // 2) build context with enhanced safety
   // Deep freeze utilities to prevent modification
@@ -266,15 +357,26 @@ module.exports = async function fillVars(template, vars, helpers = {}, options =
     _utils: utils
   });
 
-  // 3) async render with depth tracking for recursive templates
+  // 3) async render with depth tracking for recursive templates and enhanced errors
   let depth = 0;
   const renderWithDepth = async (text) => {
     if (depth >= maxRenderDepth) {
+      if (debugMode) {
+        return `{{Error: Maximum template nesting depth (${maxRenderDepth}) exceeded.
+Suggestion: Your template has too many nested levels. Consider simplifying its structure or breaking it into smaller templates.
+Example: Bad: {{a}} where a='{{b}}' where b='{{c}}' etc.  Good: Flatten the structure where possible
+}}`;
+      }
+      
       return `{{Error: Maximum template nesting depth (${maxRenderDepth}) exceeded}}`;
     }
+    
     depth++;
-    // Pass along options to lower-level render calls, including custom maxIterations
-    const result = await render(text, ctx, { maxIterations: options.maxIterations });
+    // Pass along options to lower-level render calls
+    const result = await render(text, ctx, { 
+      maxIterations: options.maxIterations,
+      debugMode: debugMode
+    });
     depth--;
     return result;
   };
