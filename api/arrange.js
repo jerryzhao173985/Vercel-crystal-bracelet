@@ -36,10 +36,18 @@ function buildBracelet(numBeads, goal, colors) {
   let diff = numBeads - total;
   if (diff > 0) {
     counts.sort((a, b) => b.rem - a.rem);
-    for (let i = 0; i < diff; i++) counts[i].count++;
+    // Use modulo to prevent out-of-bounds access when diff exceeds element count
+    for (let i = 0; i < diff; i++) {
+      const index = i % counts.length; // Safely wrap around if diff > counts.length
+      counts[index].count++;
+    }
   } else if (diff < 0) {
     counts.sort((a, b) => a.rem - b.rem);
-    for (let i = 0; i < -diff; i++) counts[i].count = Math.max(0, counts[i].count - 1);
+    // Use modulo to prevent out-of-bounds access
+    for (let i = 0; i < -diff; i++) {
+      const index = i % counts.length; // Safely wrap around if -diff > counts.length
+      counts[index].count = Math.max(0, counts[index].count - 1);
+    }
   }
   // Build list
   const beads = [];

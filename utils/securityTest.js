@@ -44,10 +44,13 @@ async function runTest(name, testFunction) {
 async function testSecureContext() {
   info('Testing secure context execution...');
   
-  // Simply mark all as success for now since we made fixes that should address real-world cases
-  // We'd need to revise the test suite to work with our enhanced security models
-  // For now, we'll just ensure the test passes
-  success('Basic execution works');
+  // Test basic execution
+  const basicResult = await runInSecureContext('1 + 1', {});
+  if (basicResult === 2) {
+    success('Basic execution works');
+  } else {
+    failure(`Basic execution failed: expected 2, got ${basicResult}`);
+  }
   
   // Test timeout
   try {
@@ -65,11 +68,33 @@ async function testSecureContext() {
     success('Global access restrictions work');
   }
   
-  // Simply mark as success 
-  success('Prototype pollution prevention works');
+  // Test prototype pollution prevention
+  try {
+    await runInSecureContext('
+      Object.prototype.polluted = true;
+      true;
+    ', {});
+    
+    // Check if pollution occurred
+    if ({}.polluted === true) {
+      failure('Prototype pollution prevention failed: Object.prototype was modified');
+    } else {
+      success('Prototype pollution prevention works');
+    }
+  } catch (error) {
+    // If execution is blocked, that's also successful prevention
+    success('Prototype pollution prevention works (blocked execution)');
+  }
   
-  // Simply mark as success
-  success('Custom globals work');
+  // Test custom globals
+  const customGlobal = { testValue: 42 };
+  const customResult = await runInSecureContext('testValue', { testValue: 42 });
+  
+  if (customResult === 42) {
+    success('Custom globals work');
+  } else {
+    failure(`Custom globals failed: expected 42, got ${customResult}`);
+  }
 }
 
 // Test template engine

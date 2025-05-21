@@ -52,6 +52,7 @@ module.exports = async (req, res) => {
             helpers: inline = {}, fileURL, debug } = F;
             
     // Enhanced debugging mode - controlled by query param or body field
+    // Define at function scope to ensure it's available throughout the function
     const debugMode = debug === 'true' || debug === true;
 
     // Validate required fields
@@ -120,15 +121,20 @@ module.exports = async (req, res) => {
     // Determine final prompt: customPrompt overrides; else select named prompt > default to basic
     let prompt;
     try {
-      if (customPrompt && customPrompt.trim()) {
+      // Store trimmed customPrompt in function scope to avoid potential block-scope issues
+      const trimmedCustomPrompt = customPrompt && typeof customPrompt === 'string' ? customPrompt.trim() : '';
+      
+      if (trimmedCustomPrompt) {
         // customPrompt can now use {dob}, {birthTime}, {gender}, e.g. "My Info: {dob} {birthTime} {gender}"
         // Pass debug mode to enhance error reporting
-        prompt = await fillVars(customPrompt.trim(), vars, helpers, { 
+        prompt = await fillVars(trimmedCustomPrompt, vars, helpers, { 
           debugMode: debugMode,
           detectMissingVars: true
         });
       } else {
-        const fn = userPrompts[promptType] || userPrompts.basic;
+        // Ensure promptType is a string and has a fallback
+        const validPromptType = typeof promptType === 'string' && promptType in userPrompts ? promptType : 'basic';
+        const fn = userPrompts[validPromptType];
         // Generate prompt string by invoking the generator function
         prompt = fn(vars);
       }

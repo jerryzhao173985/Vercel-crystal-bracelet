@@ -25,6 +25,9 @@ const COMMON = {
   Object, Array, String, Number, Boolean, RegExp, Map, Set, WeakMap, WeakSet
 };
 
+// Freeze COMMON object to prevent sandbox tampering
+Object.freeze(COMMON);
+
 // Global expression cache to improve performance with size limits to prevent memory leaks
 class LRUCache {
   constructor(maxSize = 1000) {
@@ -333,7 +336,9 @@ module.exports = async function fillVars(template, vars, helpers = {}, options =
 
   // 1) simple placeholders {dob} {birthTime}… with enhanced error reporting
   const missingVars = new Set();
-  txt = txt.replace(/\{([\w]+)\}/g, (match, k) => {
+  // Improved regex that ignores braces that are immediately followed/preceded by another brace
+  // This prevents corruption of JSON or code literals inside {{ … }} blocks
+  txt = txt.replace(/(?<!\{)\{([\w]+)\}(?!\})/g, (match, k) => {
     if (k in vars) {
       const val = vars[k];
       return val !== undefined && val !== null ? String(val) : '';
