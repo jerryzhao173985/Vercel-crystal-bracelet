@@ -56,7 +56,7 @@ const stringUtils = {
   
   // Format a number with commas
   formatNumber: (num) => {
-    if (num === undefined || num === null) return '';
+    if (num === undefined || num === null || isNaN(Number(num))) return '';
     return String(num).replace(/(\d)(?=(\d{3})+(?!\d))/g, '$1,');
   },
   

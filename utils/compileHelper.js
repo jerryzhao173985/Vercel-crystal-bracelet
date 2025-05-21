@@ -11,8 +11,8 @@ const SECURITY_PATTERNS = {
   // Network access (except safe fetch)
   NETWORK: /\b(require\s*\(\s*["'](?:http|https|net|dgram))/,
   // Uncommon syntax patterns that might indicate obfuscation
-  // Improved to allow valid regex escape sequences in string replacements
-  OBFUSCATION: /(?<!'\\)\\x[0-9a-f]{2}|(?<!'\\)\\u[0-9a-f]{4}|(?<!'\\)\\[0-7]{3}|(?<!'.*\\[dws].*');\s*\[.*\]\s*\(/
+  // Simplified pattern without lookbehind for Node.js compatibility
+  OBFUSCATION: /\\x[0-9a-f]{2}|\\u[0-9a-f]{4}|\\[0-7]{3}|;\s*\[.*\]\s*\(/
 };
 
 /**
@@ -86,7 +86,7 @@ module.exports = function compileHelper(src = '', options = {}) {
     // Note: This timeout only applies to the compilation/definition, not to subsequent function calls
     new vm.Script(wrapped, { filename: 'helper.js' }).runInContext(ctx, { timeout });
     
-    const fn = ctx.module.exports;
+    let fn = ctx.module.exports;
     
     // Validate the compiled result
     if (typeof fn !== 'function') {

@@ -169,12 +169,16 @@ module.exports = function loadHelperModule(code = '', options = {}) {
   if (!disableCache) {
     if (!global.__helperCache) global.__helperCache = {};
     
-    // Implement LRU-like behavior - remove oldest entry if cache is full
+    // When cache is full, remove a random entry to prevent predictable eviction
     const cacheKeys = Object.keys(global.__helperCache);
     if (cacheKeys.length >= MAX_CACHE_ENTRIES) {
-      delete global.__helperCache[cacheKeys[0]];
+      // Use a random index to avoid thrashing frequently used entries
+      const randomIndex = Math.floor(Math.random() * cacheKeys.length);
+      delete global.__helperCache[cacheKeys[randomIndex]];
     }
     
+    // Add timestamp to entry to potentially implement LRU in the future
+    bag._cacheTimestamp = Date.now();
     global.__helperCache[cacheKey] = bag;
   }
 

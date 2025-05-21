@@ -5,8 +5,19 @@
  * 
  * IMPORTANT: While these utilities provide significantly improved security
  * compared to basic VM usage, they are NOT fully secure against determined
- * attackers. For truly secure sandboxing, consider isolated-vm or separate
- * processes with containerization.
+ * attackers. Node.js's built-in VM module has known limitations and can be 
+ * broken out of by sophisticated attackers.
+ * 
+ * PRODUCTION SECURITY RECOMMENDATIONS:
+ * For critical applications with untrusted code execution, consider:
+ * 1. The `isolated-vm` package which provides true V8 isolation
+ *    npm: https://www.npmjs.com/package/isolated-vm
+ * 2. Separate worker processes with restricted privileges
+ * 3. Container-based solutions like Docker for complete isolation
+ * 4. Using a dedicated Function-as-a-Service provider for untrusted code
+ * 
+ * These utilities should be considered a defense-in-depth layer rather
+ * than a complete security solution for truly adversarial code.
  */
 
 const vm = require('vm');
