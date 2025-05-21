@@ -120,14 +120,10 @@ function createSecureContext(additionalGlobals = {}, options = {}) {
     }
   }
   
-  if (disableConstructors) {
-    // Remove constructor access
-    if (context.Object) {
-      context.Object.constructor = function() { 
-        throw new Error('Constructor access denied');
-      };
-    }
-  }
+  // We no longer attempt to overwrite Object.constructor as it's ineffective
+  // and can potentially leak outside the sandbox
+  // Instead, we focus on freezing prototypes and denying __proto__ access
+  // which provides better protection without side effects
   
   // Create and return the VM context
   return vm.createContext(context);
@@ -246,11 +242,21 @@ async function runSecureFunction(fn, args = [], options = {}) {
     maxObjectNesting = 10
   } = options;
   
-  // Simple security validation for arguments
+  // Simple security validation for arguments with cycle detection
   if (validateArgs) {
+    // Use WeakSet to track objects already seen to prevent infinite recursion on cyclic structures
+    const seen = new WeakSet();
+    
     const validateValue = (value, depth = 0) => {
+      // Check for maximum nesting depth first
       if (depth > maxObjectNesting) {
         throw new Error(`Argument exceeds maximum nesting depth of ${maxObjectNesting}`);
+      }
+      
+      // Handle cyclic references for objects
+      if (value !== null && typeof value === 'object') {
+        if (seen.has(value)) return; // Break the recursion for cyclic references
+        seen.add(value);
       }
       
       if (Array.isArray(value)) {
