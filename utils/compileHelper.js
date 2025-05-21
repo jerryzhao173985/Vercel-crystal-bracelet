@@ -31,7 +31,8 @@ module.exports = function compileHelper(src = '', options = {}) {
     maxLength = 1000,     // Increased max length from 500 to allow more complex functions
     timeout = 100,       // Increased timeout for compilation
     allowMultiline = true, // Allow multiline functions for better readability
-    strictMode = false    // Option for extra strict security checks
+    strictMode = false,    // Option for extra strict security checks
+    requireParameters = false // Whether to require at least one parameter in strict mode
   } = options;
   
   // Basic input validation
@@ -115,8 +116,8 @@ module.exports = function compileHelper(src = '', options = {}) {
       };
     }
     
-    // Additional validation for function arity if needed
-    if (strictMode && fn.length === 0) {
+    // Additional validation for function arity if specified in options
+    if (strictMode && options.requireParameters && fn.length === 0) {
       throw new Error('Helper function must accept at least one parameter');
     }
     

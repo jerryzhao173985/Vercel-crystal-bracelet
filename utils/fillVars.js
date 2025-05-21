@@ -124,10 +124,13 @@ async function evalExpr(expr, ctx) {
 }
 
 // Token-based template parser that handles nested expressions and provides detailed errors
-async function render(tpl, ctx) {
+async function render(tpl, ctx, options = {}) {
   let out = '';
   let i = 0;
-  const maxIterations = 1000; // Safety limit to prevent infinite loops
+  // Calculate a reasonable iteration limit based on template size
+  // Using a ratio of 5x template length with a minimum of 1000 and maximum of 10000
+  const maxIterations = options.maxIterations || 
+    Math.min(10000, Math.max(1000, tpl.length * 5)); // Dynamic safety limit
   let iterations = 0;
   
   try {
@@ -199,7 +202,7 @@ async function render(tpl, ctx) {
     }
     
     if (iterations >= maxIterations) {
-      return `{{Error: Template processing exceeded ${maxIterations} iterations - possible infinite loop}}`;
+      return `{{Error: Template processing exceeded ${maxIterations} iterations (template length: ${tpl.length}) - possible infinite loop or very complex template}}`;
     }
     
     return out;
@@ -270,7 +273,8 @@ module.exports = async function fillVars(template, vars, helpers = {}, options =
       return `{{Error: Maximum template nesting depth (${maxRenderDepth}) exceeded}}`;
     }
     depth++;
-    const result = await render(text, ctx);
+    // Pass along options to lower-level render calls, including custom maxIterations
+    const result = await render(text, ctx, { maxIterations: options.maxIterations });
     depth--;
     return result;
   };

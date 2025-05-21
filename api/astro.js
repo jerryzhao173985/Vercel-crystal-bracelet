@@ -68,11 +68,11 @@ module.exports = async (req, res) => {
     const timeRegex = /^([01]?\d|2[0-3]):[0-5]\d$/;
     
     if (!dateRegex.test(dob)) {
-      throw new ValidationError('Invalid date format. Use YYYY-MM-DD');
+      throw new ValidationError('Invalid date format. Use YYYY-MM-DD (e.g., 1990-01-31)');
     }
     
     if (!timeRegex.test(birthTime)) {
-      throw new ValidationError('Invalid time format. Use HH:MM');
+      throw new ValidationError('Invalid time format. Use HH:MM in 24-hour format (e.g., 14:30 for 2:30 PM)');
     }
     
     if (!['male', 'female'].includes(gender)) {
