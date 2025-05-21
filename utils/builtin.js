@@ -91,7 +91,7 @@ const colorUtils = {
     return `#${rComplement.toString(16).padStart(2, '0')}${gComplement.toString(16).padStart(2, '0')}${bComplement.toString(16).padStart(2, '0')}`;
   },
   
-  // Lighten a color by percentage
+  // Lighten a color by percentage (uses linear interpolation towards white)
   lightenColor: (hexColor, percent = 30) => {
     if (!hexColor || !hexColor.startsWith('#')) return '#FFFFFF';
     
@@ -101,15 +101,17 @@ const colorUtils = {
       hex = hex.split('').map(char => char + char).join('');
     }
     
-    // Convert to RGB, lighten, convert back to hex
+    // Convert to RGB
     const r = parseInt(hex.slice(0, 2), 16);
     const g = parseInt(hex.slice(2, 4), 16);
     const b = parseInt(hex.slice(4, 6), 16);
     
-    const factor = 1 + (percent / 100);
-    const rLightened = Math.min(255, Math.round(r * factor));
-    const gLightened = Math.min(255, Math.round(g * factor));
-    const bLightened = Math.min(255, Math.round(b * factor));
+    // Linear interpolation towards white to preserve hue
+    const ratio = percent / 100;
+    const lerp = (c) => Math.round(c + (255 - c) * ratio);
+    const rLightened = lerp(r);
+    const gLightened = lerp(g);
+    const bLightened = lerp(b);
     
     return `#${rLightened.toString(16).padStart(2, '0')}${gLightened.toString(16).padStart(2, '0')}${bLightened.toString(16).padStart(2, '0')}`;
   },

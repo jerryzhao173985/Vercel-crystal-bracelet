@@ -53,7 +53,7 @@ function buildBracelet(numBeads, goal, colors) {
 }
 
 // Import error handler
-const { ValidationError, handleApiError, withTimeout } = require('../utils/errorHandler');
+const { ValidationError, handleApiError } = require('../utils/errorHandler');
 
 module.exports = (req, res) => {
   try {
@@ -79,11 +79,19 @@ module.exports = (req, res) => {
     
     // Validate goal percentages
     const elements = ['metal', 'wood', 'water', 'fire', 'earth'];
+    
+    // Validate individual elements
     elements.forEach(element => {
       if (typeof ratios.goal[element] !== 'number') {
         throw new ValidationError(`Invalid goal percentage for ${element}`);
       }
     });
+    
+    // Validate that percentages sum to approximately 100%
+    const totalPct = elements.reduce((sum, element) => sum + ratios.goal[element], 0);
+    if (Math.abs(totalPct - 100) > 1) { // Allow for small floating point errors
+      throw new ValidationError(`Sum of goal percentages must equal 100%, got ${totalPct.toFixed(2)}%`);
+    }
     
     // Validate colors format
     elements.forEach(element => {

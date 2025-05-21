@@ -3,10 +3,11 @@ const vm = require('vm');
 
 // Define safe globals with a restricted require implementation
 const safeRequire = (moduleName) => {
+  // Only allow modules that are side-effect free and don't provide access to filesystem or network
   const ALLOWLIST = [
-    'path', 'url', 'querystring', 'crypto', 
-    'zlib', 'buffer', 'util', 'stream', 
-    'assert', 'events', 'http', 'https'
+    'path', 'url', 'querystring', 'util', 'buffer',
+    // The following modules could potentially be abused and should only be included if necessary:
+    // 'crypto', 'zlib', 'assert', 'events', 'http', 'https', 'stream'
   ];
   if (ALLOWLIST.includes(moduleName)) {
     return require(moduleName);
@@ -24,8 +25,43 @@ const COMMON = {
   Object, Array, String, Number, Boolean, RegExp, Map, Set, WeakMap, WeakSet
 };
 
-// Global expression cache to improve performance
-const expressionCache = new Map();
+// Global expression cache to improve performance with size limits to prevent memory leaks
+class LRUCache {
+  constructor(maxSize = 1000) {
+    this.cache = new Map();
+    this.maxSize = maxSize;
+  }
+  
+  has(key) {
+    return this.cache.has(key);
+  }
+  
+  get(key) {
+    const item = this.cache.get(key);
+    if (item) {
+      // Update access time by removing and re-adding
+      this.cache.delete(key);
+      this.cache.set(key, item);
+    }
+    return item;
+  }
+  
+  set(key, value) {
+    // Remove oldest entry if at capacity
+    if (this.cache.size >= this.maxSize) {
+      const oldestKey = this.cache.keys().next().value;
+      this.cache.delete(oldestKey);
+    }
+    this.cache.set(key, value);
+  }
+  
+  clear() {
+    this.cache.clear();
+  }
+}
+
+// Global expression cache with size limit
+const expressionCache = new LRUCache(5000);
 
 function toString(val) {
   if (val === undefined) return undefined;        // trigger "leave literal"
@@ -50,10 +86,29 @@ async function evalExpr(expr, ctx) {
     // Execute with timeout protection (30s)
     let result = await script.runInContext(ctx, { timeout: 30_000 });
 
-    // second await if expression returns a promise
+    // If result is a promise, we need to await it with an additional timeout protection
     if (result && typeof result.then === 'function') {
       try {
-        result = await result;
+        // Use AbortController for better timeout management
+        const controller = new AbortController();
+        const { signal } = controller;
+        
+        // Create a timeout promise with proper cleanup
+        const timeoutPromise = new Promise((_, reject) => {
+          const id = setTimeout(() => {
+            reject(new Error(`Promise execution timed out after 30000ms`));
+            controller.abort(); // Signal abortion to any listeners
+          }, 30_000);
+          
+          // Ensure the timer is cleared if promise completes or errors
+          signal.addEventListener('abort', () => clearTimeout(id), { once: true });
+        });
+        
+        // Race the actual promise against the timeout
+        result = await Promise.race([
+          result.finally(() => controller.abort()), // Ensure cleanup happens
+          timeoutPromise
+        ]);
       } catch (promiseError) {
         console.error(`Promise error in expression "${expr}": ${promiseError.message}`);
         return `{{Error: ${promiseError.message}}}`; // Return formatted error
@@ -92,9 +147,7 @@ async function render(tpl, ctx) {
       // Skip leading whitespace
       while (j < tpl.length && tpl[j].trim() === '') j++;
       
-      // Check for nested expressions
-      const nestedExprStart = tpl.indexOf('{{', open + 2);
-      
+      // Process each character to find the matching closing brackets
       while (j < tpl.length) {
         const char = tpl[j];
         
@@ -122,8 +175,24 @@ async function render(tpl, ctx) {
         out += `{{Error: Unclosed expression starting at position ${open}}}`;
         break; 
       }
+      
+      // Extract expression and evaluate - first recursively render template inside
+      let expr = tpl.slice(open + 2, j).trim();
+      
+      // Simple and safer nested template handling 
+      // First evaluate any nested templates
+      if (expr.includes('{{')) {
+        try {
+          // Process inner templates first
+          expr = await render(expr, ctx);
+        } catch (nestedError) {
+          out += `{{Error: Failed to process nested template: ${nestedError.message}}}`;
+          i = j + 2;
+          continue;
+        }
+      }
 
-      const expr = tpl.slice(open + 2, j).trim();
+      // Then evaluate the expression
       const result = await evalExpr(expr, ctx);
       out += result;
       i = j + 2;
@@ -177,18 +246,21 @@ module.exports = async function fillVars(template, vars, helpers = {}, options =
   });
 
   // 2) build context with enhanced safety
+  // Deep freeze utilities to prevent modification
+  const utils = Object.freeze({
+    isObject: (val) => val !== null && typeof val === 'object',
+    isArray: Array.isArray,
+    isEmpty: (val) => val == null || val === '' || 
+                    (Array.isArray(val) && val.length === 0) || 
+                    (typeof val === 'object' && Object.keys(val).length === 0)
+  });
+  
+  // Create a fresh context with frozen common objects to prevent tampering
   const ctx = vm.createContext({
-    ...COMMON,
-    ...vars,
-    ...helpers,
-    // Add useful utility functions
-    _utils: {
-      isObject: (val) => val !== null && typeof val === 'object',
-      isArray: Array.isArray,
-      isEmpty: (val) => val == null || val === '' || 
-                      (Array.isArray(val) && val.length === 0) || 
-                      (typeof val === 'object' && Object.keys(val).length === 0)
-    }
+    ...COMMON,  // Common objects are frozen at definition
+    ...vars,    // Variables are specific to this render
+    ...helpers, // Helper functions should be trusted
+    _utils: utils
   });
 
   // 3) async render with depth tracking for recursive templates

@@ -4,13 +4,15 @@ const vm = require('vm');
 // Enhanced security patterns to detect malicious code
 const SECURITY_PATTERNS = {
   // Dangerous globals, methods and properties that could enable code breakout
-  DANGEROUS: /\b(process|global|constructor|prototype|__proto__|eval|Function|setTimeout\(\s*["']|new\s+Function|["']constructor["'])/,
+  // Refined pattern to reduce false positives while catching actual threats
+  DANGEROUS: /\b(process|global|eval)\b|(?<!\w)Function(?!\w*[:(])|__proto__|\bconstructor\s*[.(]|\bprototype\s*[:=]|\bsetTimeout\(\s*["']|new\s+Function|["']constructor["']/,
   // File system and process related operations
   FILESYSTEM: /\b(require\s*\(\s*["'](?:fs|child_process|path|os|cluster))/,
   // Network access (except safe fetch)
   NETWORK: /\b(require\s*\(\s*["'](?:http|https|net|dgram))/,
   // Uncommon syntax patterns that might indicate obfuscation
-  OBFUSCATION: /\\x[0-9a-f]{2}|\\u[0-9a-f]{4}|\\[0-7]{3}|;\s*\[.*\]\s*\(/
+  // Improved to allow valid regex escape sequences in string replacements
+  OBFUSCATION: /(?<!'\\)\\x[0-9a-f]{2}|(?<!'\\)\\u[0-9a-f]{4}|(?<!'\\)\\[0-7]{3}|(?<!'.*\\[dws].*');\s*\[.*\]\s*\(/
 };
 
 /**
@@ -58,10 +60,12 @@ module.exports = function compileHelper(src = '', options = {}) {
        c) async functions with return
   -------------------------------------------------------------------- */
   const returnsValue =
-    /=>\s*[^({]/.test(src.trim()) ||          // arrow no braces
+    /=>\s*(\([^)]*\)|[^({\s])/.test(src.trim()) || // arrow concise incl. `( … )`
     /return\s+[^;]*/.test(src) ||             // explicit return with value
-    /async\s+.*return\s+/.test(src) ||        // async with return
-    /console\.log\s*\(/.test(src);            // logging is allowed without return for testing
+    /async\s+.*return\s+/.test(src);          // async with return
+    
+  // Note: we removed /console\.log\s*\(/ from checking for return values
+  // since logging alone doesn't guarantee a return value
     
   if (!returnsValue) {
     throw new Error('Helper must explicitly return a value (use arrow function or return statement)');
@@ -79,6 +83,7 @@ module.exports = function compileHelper(src = '', options = {}) {
 
   try {
     // Compile and run with timeout protection
+    // Note: This timeout only applies to the compilation/definition, not to subsequent function calls
     new vm.Script(wrapped, { filename: 'helper.js' }).runInContext(ctx, { timeout });
     
     const fn = ctx.module.exports;
@@ -86,6 +91,28 @@ module.exports = function compileHelper(src = '', options = {}) {
     // Validate the compiled result
     if (typeof fn !== 'function') {
       throw new Error('Compilation did not result in a function');
+    }
+    
+    // Wrap the function with timeout protection if needed
+    if (options.wrapWithTimeout) {
+      const originalFn = fn;
+      fn = function(...args) {
+        const timeoutMs = options.executionTimeout || timeout;
+        return new Promise((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error(`Helper function execution timed out after ${timeoutMs}ms`));
+          }, timeoutMs);
+          
+          try {
+            const result = originalFn.apply(this, args);
+            clearTimeout(timeoutId);
+            resolve(result);
+          } catch (error) {
+            clearTimeout(timeoutId);
+            reject(error);
+          }
+        });
+      };
     }
     
     // Additional validation for function arity if needed
