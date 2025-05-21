@@ -85,6 +85,22 @@ module.exports = (req, res) => {
       if (typeof ratios.goal[element] !== 'number') {
         throw new ValidationError(`Invalid goal percentage for ${element}`);
       }
+      
+      // Add range validation to ensure percentages are between 0-100
+      const percentage = ratios.goal[element];
+      if (percentage < 0 || percentage > 100) {
+        throw new ValidationError(
+          `Invalid percentage value for ${element}: ${percentage}. Must be between 0 and 100.`,
+          {},
+          {
+            suggestion: `Please ensure all percentages are between 0 and 100. Current value for ${element}: ${percentage}`,
+            example: {
+              bad: `${element}: ${percentage}%`,
+              good: `${element}: ${percentage < 0 ? 0 : 100}%`
+            }
+          }
+        );
+      }
     });
     
     // Validate that percentages sum to approximately 100%

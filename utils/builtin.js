@@ -9,23 +9,44 @@ const dateUtils = {
   // Format date as weekday
   dayOfWeek: (dob) => new Date(dob).toLocaleDateString('zh-CN', { weekday: 'long' }),
   
-  // Format date in various ways
+  // Format date in various ways using Intl.DateTimeFormat for better localization
   formatDate: (date, format = 'YYYY-MM-DD') => {
     const d = new Date(date);
     if (isNaN(d.getTime())) return '';
     
-    const year = d.getFullYear();
-    const month = String(d.getMonth() + 1).padStart(2, '0');
-    const day = String(d.getDate()).padStart(2, '0');
-    const hours = String(d.getHours()).padStart(2, '0');
-    const minutes = String(d.getMinutes()).padStart(2, '0');
+    // Use Intl.DateTimeFormat for standard formats
+    if (format === 'long') {
+      return new Intl.DateTimeFormat('zh-CN', { 
+        year: 'numeric', month: 'long', day: 'numeric', 
+        hour: '2-digit', minute: '2-digit'
+      }).format(d);
+    }
     
-    return format
-      .replace('YYYY', year)
-      .replace('MM', month)
-      .replace('DD', day)
-      .replace('HH', hours)
-      .replace('mm', minutes);
+    if (format === 'short') {
+      return new Intl.DateTimeFormat('zh-CN', { 
+        year: 'numeric', month: 'numeric', day: 'numeric' 
+      }).format(d);
+    }
+    
+    // For custom format strings, use the original implementation with global tokens
+    const tokens = {
+      'YYYY': d.getFullYear(),
+      'MM': String(d.getMonth() + 1).padStart(2, '0'),
+      'DD': String(d.getDate()).padStart(2, '0'),
+      'HH': String(d.getHours()).padStart(2, '0'),
+      'mm': String(d.getMinutes()).padStart(2, '0'),
+      'ss': String(d.getSeconds()).padStart(2, '0'),
+      'M': d.getMonth() + 1,
+      'D': d.getDate(),
+      'H': d.getHours(),
+      'm': d.getMinutes(),
+      's': d.getSeconds()
+    };
+    
+    // Replace all tokens in the format string
+    return Object.entries(tokens).reduce((result, [token, value]) => {
+      return result.replace(new RegExp(token, 'g'), value);
+    }, format);
   },
   
   // Calculate age from birthdate
@@ -165,7 +186,8 @@ const elementUtils = {
       wood: '#228B22',    // Forest Green
       water: '#1E90FF',   // Dodger Blue
       fire: '#FF4500',    // Orange Red
-      earth: '#DEB887'    // Burlywood
+      earth: '#DEB887',   // Burlywood
+      air: '#87CEEB'      // Sky Blue - added for Western astrology compatibility
     };
     
     return colors[element.toLowerCase()] || '#CCCCCC';
@@ -180,7 +202,8 @@ const elementUtils = {
       fire: 'metal',
       water: 'earth',
       earth: 'water',
-      wood: 'wood'  // Wood is neutral/balanced with itself in some systems
+      wood: 'wood',  // Wood is neutral/balanced with itself in some systems
+      air: 'earth'   // Air is opposite to earth in Western astrology
     };
     
     return opposites[element.toLowerCase()] || null;
@@ -205,14 +228,47 @@ module.exports = {
     return /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/.test(time);
   },
   
-  // Simplified fetch wrapper for templates
-  async simpleFetch(url) {
+  // Improved fetch wrapper for templates with timeout and error handling
+  async simpleFetch(url, options = {}) {
     try {
-      const response = await fetch(url);
-      return await response.json();
+      // Add reasonable defaults and timeout handling
+      const fetchOptions = {
+        headers: { 'Accept': 'application/json', ...options.headers },
+        timeout: options.timeout || 5000, // 5-second default timeout
+        ...options
+      };
+      
+      // Create AbortController for timeout
+      const controller = new AbortController();
+      const { signal } = controller;
+      
+      // Set up timeout
+      const timeoutId = setTimeout(() => controller.abort(), fetchOptions.timeout);
+      
+      try {
+        // Use node-fetch compatibility for server environments
+        const fetchFn = typeof global !== 'undefined' && global.fetch ? global.fetch : fetch;
+        
+        const response = await fetchFn(url, { ...fetchOptions, signal });
+        clearTimeout(timeoutId);
+        
+        // Handle different response types
+        if (options.responseType === 'text') {
+          return await response.text();
+        } else {
+          return await response.json();
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId);
+        
+        if (fetchError.name === 'AbortError') {
+          throw new Error(`Request to ${url} timed out after ${fetchOptions.timeout}ms`);
+        }
+        throw fetchError;
+      }
     } catch (error) {
       console.error(`Error fetching ${url}:`, error.message);
-      return { error: error.message };
+      return { error: error.message, code: error.code || 'FETCH_ERROR' };
     }
   }
 };

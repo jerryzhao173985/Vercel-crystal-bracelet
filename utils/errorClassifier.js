@@ -14,14 +14,23 @@ const ERROR_PATTERNS = [
     suggestion: 'Check for missing closing parentheses, brackets, or quotes. Ensure your expression follows JavaScript syntax rules.'
   },
   
-  // Reference errors
+  // Reference errors with improved variable name extraction
   {
-    pattern: /(\w+) is not defined|Cannot read properties of (undefined|null)|ReferenceError/i,
+    pattern: /(?:([\w.]+) is not defined)|(?:Cannot read properties of (undefined|null)(?:.*at '?(\w+)'?)?)|(ReferenceError(?:.*["']([\w.]+)["']))/i,
     type: 'REFERENCE_ERROR',
     message: 'Undefined variable or property',
     suggestion: 'Make sure all variables used in your template are properly defined. Check for typos in variable names.',
     getDetails: (error, match) => {
-      const varName = match[1] || match[2] || 'a variable';
+      // Extract variable name with better pattern matching
+      // match[1]: direct 'is not defined' pattern
+      // match[3]: property access on undefined/null
+      // match[4]: variable name in error message quotes
+      const varName = match[1] || match[3] || match[4] || match[2] || 'a variable';
+      
+      if (varName === 'undefined' || varName === 'null') {
+        return `Trying to access a property of ${varName}. Check if the parent object exists before accessing its properties.`;
+      }
+      
       return `The variable "${varName}" was used but not defined. Check if it's passed in the context object or defined in a helper function.`;
     }
   },
