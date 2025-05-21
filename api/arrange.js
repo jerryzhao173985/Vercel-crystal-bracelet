@@ -52,22 +52,75 @@ function buildBracelet(numBeads, goal, colors) {
   return beads;
 }
 
+// Import error handler
+const { ValidationError, handleApiError, withTimeout } = require('../utils/errorHandler');
+
 module.exports = (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
+  try {
+    // Method validation
+    if (req.method !== 'POST') {
+      throw new ValidationError('Method Not Allowed', { method: req.method });
+    }
+    
+    // Extract and validate request parameters
+    const { numBeads, ratios, seed } = req.body;
+    
+    if (!numBeads) {
+      throw new ValidationError('Missing numBeads parameter');
+    }
+    
+    if (typeof numBeads !== 'number' || numBeads <= 0 || numBeads > 100) {
+      throw new ValidationError('numBeads must be a positive number between 1 and 100');
+    }
+    
+    if (!ratios || !ratios.goal || !ratios.colors) {
+      throw new ValidationError('Missing ratios object with goal and colors properties');
+    }
+    
+    // Validate goal percentages
+    const elements = ['metal', 'wood', 'water', 'fire', 'earth'];
+    elements.forEach(element => {
+      if (typeof ratios.goal[element] !== 'number') {
+        throw new ValidationError(`Invalid goal percentage for ${element}`);
+      }
+    });
+    
+    // Validate colors format
+    elements.forEach(element => {
+      const color = ratios.colors[element];
+      if (!color || typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        throw new ValidationError(`Invalid color format for ${element}. Must be a hex color like #FF0000`);
+      }
+    });
+    
+    // Parse seed if provided
+    let parsedSeed;
+    if (seed !== undefined) {
+      parsedSeed = parseInt(seed, 10);
+      if (isNaN(parsedSeed)) {
+        throw new ValidationError('Seed must be a valid number');
+      }
+    }
+    
+    // Build and shuffle
+    let beads = buildBracelet(numBeads, ratios.goal, ratios.colors);
+    const rng = parsedSeed !== undefined ? mulberry32(parsedSeed) : Math.random;
+    shuffle(beads, rng);
+    
+    // Return array of hex colors
+    res.status(200).json({ 
+      beads: beads.map(b => b.color),
+      meta: {
+        timestamp: new Date().toISOString(),
+        seed: parsedSeed !== undefined ? parsedSeed : 'random',
+        count: beads.length
+      }
+    });
+  } catch (error) {
+    return handleApiError(error, res, {
+      includeStack: process.env.NODE_ENV !== 'production'
+    });
   }
-  const { numBeads, ratios, seed } = req.body;
-  if (!numBeads || !ratios || !ratios.goal || !ratios.colors) {
-    res.status(400).json({ error: 'Missing required parameters' });
-    return;
-  }
-  // Build and shuffle
-  let beads = buildBracelet(numBeads, ratios.goal, ratios.colors);
-  const rng = seed != null ? mulberry32(parseInt(seed, 10)) : Math.random;
-  shuffle(beads, rng);
-  // Return array of hex colors
-  res.status(200).json({ beads: beads.map(b => b.color) });
 };
 
 // Extend function timeout if needed

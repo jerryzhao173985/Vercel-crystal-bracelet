@@ -50,9 +50,35 @@ module.exports = async (req, res) => {
           customPrompt, promptType = 'basic',
           helpers: inline = {}, fileURL } = F;
 
-  if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
-    return res.status(400).json({ error:'missing dob, birthTime, gender, deepseekKey, or openaiKey' });
-  }
+  // Import error handler
+  const { handleApiError, ValidationError } = require('../utils/errorHandler');
+
+  try {
+    // Validate required fields
+    if (!dob || !birthTime || !gender || !deepseekKey || !openaiKey) {
+      throw new ValidationError('Missing required fields', {
+        dob: !dob ? 'Missing birth date' : null,
+        birthTime: !birthTime ? 'Missing birth time' : null,
+        gender: !gender ? 'Missing gender' : null,
+        keys: (!deepseekKey || !openaiKey) ? 'Missing API keys' : null
+      });
+    }
+    
+    // Additional validation
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    const timeRegex = /^([01]?\d|2[0-3]):[0-5]\d$/;
+    
+    if (!dateRegex.test(dob)) {
+      throw new ValidationError('Invalid date format. Use YYYY-MM-DD');
+    }
+    
+    if (!timeRegex.test(birthTime)) {
+      throw new ValidationError('Invalid time format. Use HH:MM');
+    }
+    
+    if (!['male', 'female'].includes(gender)) {
+      throw new ValidationError('Invalid gender. Use "male" or "female"');
+    }
 
   /* --------------------------------------------------------------
      2)  Assemble helpers  (fail-soft at every step)
@@ -96,95 +122,177 @@ module.exports = async (req, res) => {
   // Call DeepSeek via OpenAI SDK
   let analysisText;
   try {
+    // Use withTimeout for better timeout handling
+    const { withTimeout } = require('../utils/errorHandler');
+    
+    // Call DeepSeek with timeout protection
     const dsClient = new OpenAI({ baseURL: 'https://api.deepseek.com', apiKey: deepseekKey });
-    const dsRes = await dsClient.chat.completions.create({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        { role: 'user',   content: prompt }
-      ]
-    });
+    
+    const getDsResponse = async () => {
+      const dsRes = await dsClient.chat.completions.create({
+        model: 'deepseek-chat',
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user',   content: prompt }
+        ]
+      });
+      return dsRes;
+    };
+    
+    // 45 second timeout for DeepSeek API
+    const dsRes = await withTimeout(getDsResponse, 45000);
     analysisText = dsRes.choices?.[0]?.message?.content;
+    
+    if (!analysisText) {
+      throw new Error('DeepSeek API returned empty response');
+    }
   } catch (err) {
-    res.status(500).json({ error: 'DeepSeek API error', details: err.message });
-    return;
+    console.error('DeepSeek API error:', err.message);
+    if (err.name === 'TimeoutError') {
+      return handleApiError(err, res, { statusCode: 408 });
+    }
+    return handleApiError(err, res, { 
+      statusCode: 500, 
+      includeStack: process.env.NODE_ENV !== 'production'
+    });
   }
   // Use OpenAI Structured Response API to extract current and goal percentages
   let ratios;
   try {
+    // Use withTimeout for better timeout handling
+    const { withTimeout } = require('../utils/errorHandler');
+    
     const oaClient = new OpenAI({ apiKey: openaiKey });
-    const oaRes = await oaClient.responses.create({
-      model: 'gpt-4.1',
-      input: [
-        {
-          role: 'system',
-          content: '你是一个JSON解析器，只输出包含 current（当前分布）、goal（最佳调节比例）和 colors（推荐颜色）三个对象，不要额外文字。' +
-                   'current 和 goal 对象的属性金、木、水、火、土为数字百分比；colors 对象的属性金、木、水、火、土为十六进制颜色字符串。'
-        },
-        {
-          role: 'user',
-          content: `请从以下内容中抽取 current、goal 和 colors，并以纯JSON输出：\n\n${analysisText}`
-        }
-      ],
-      text: {
-        format: {
-          type: 'json_schema',
-          name: 'five_element_distribution',
-          schema: {
-            type: 'object',
-            properties: {
-              current: {
-                type: 'object',
-                properties: {
-                  metal:  { type: 'number' },
-                  wood:   { type: 'number' },
-                  water:  { type: 'number' },
-                  fire:   { type: 'number' },
-                  earth:  { type: 'number' }
+    
+    const getOaResponse = async () => {
+      return await oaClient.responses.create({
+        model: 'gpt-4.1',
+        input: [
+          {
+            role: 'system',
+            content: '你是一个JSON解析器，只输出包含 current（当前分布）、goal（最佳调节比例）和 colors（推荐颜色）三个对象，不要额外文字。' +
+                     'current 和 goal 对象的属性金、木、水、火、土为数字百分比；colors 对象的属性金、木、水、火、土为十六进制颜色字符串。'
+          },
+          {
+            role: 'user',
+            content: `请从以下内容中抽取 current、goal 和 colors，并以纯JSON输出：\n\n${analysisText}`
+          }
+        ],
+        text: {
+          format: {
+            type: 'json_schema',
+            name: 'five_element_distribution',
+            schema: {
+              type: 'object',
+              properties: {
+                current: {
+                  type: 'object',
+                  properties: {
+                    metal:  { type: 'number' },
+                    wood:   { type: 'number' },
+                    water:  { type: 'number' },
+                    fire:   { type: 'number' },
+                    earth:  { type: 'number' }
+                  },
+                  required: ['metal','wood','water','fire','earth'],
+                  additionalProperties: false
                 },
-                required: ['metal','wood','water','fire','earth'],
-                additionalProperties: false
+                goal: {
+                  type: 'object',
+                  properties: {
+                    metal:  { type: 'number' },
+                    wood:   { type: 'number' },
+                    water:  { type: 'number' },
+                    fire:   { type: 'number' },
+                    earth:  { type: 'number' }
+                  },
+                  required: ['metal','wood','water','fire','earth'],
+                  additionalProperties: false
+                },
+                colors: {
+                  type: 'object',
+                  properties: {
+                    metal:  { type: 'string' },
+                    wood:   { type: 'string' },
+                    water:  { type: 'string' },
+                    fire:   { type: 'string' },
+                    earth:  { type: 'string' }
+                  },
+                  required: ['metal','wood','water','fire','earth'],
+                  additionalProperties: false
+                }
               },
-              goal: {
-                type: 'object',
-                properties: {
-                  metal:  { type: 'number' },
-                  wood:   { type: 'number' },
-                  water:  { type: 'number' },
-                  fire:   { type: 'number' },
-                  earth:  { type: 'number' }
-                },
-                required: ['metal','wood','water','fire','earth'],
-                additionalProperties: false
-              },
-              colors: {
-                type: 'object',
-                properties: {
-                  metal:  { type: 'string' },
-                  wood:   { type: 'string' },
-                  water:  { type: 'string' },
-                  fire:   { type: 'string' },
-                  earth:  { type: 'string' }
-                },
-                required: ['metal','wood','water','fire','earth'],
-                additionalProperties: false
-              }
-            },
-            required: ['current','goal','colors'],
-            additionalProperties: false
+              required: ['current','goal','colors'],
+              additionalProperties: false
+            }
           }
         }
-      }
-    });
+      });
+    };
+    
+    // 30 second timeout for OpenAI API
+    const oaRes = await withTimeout(getOaResponse, 30000);  
+    
     // The structured output is in output_text
     const text = oaRes.output_text;
-    ratios = JSON.parse(text);
+    if (!text) {
+      throw new Error('OpenAI Structured Response API returned empty response');
+    }
+    
+    // Parse and validate the structured response
+    try {
+      ratios = JSON.parse(text);
+      
+      // Validate that all required properties exist and are in the expected format
+      const elements = ['metal', 'wood', 'water', 'fire', 'earth'];
+      const validateRatios = (obj, type) => {
+        for (const elem of elements) {
+          if (type === 'colors') {
+            if (typeof obj[elem] !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(obj[elem])) {
+              throw new Error(`Invalid color format for ${elem}: ${obj[elem]}`);
+            }
+          } else {
+            if (typeof obj[elem] !== 'number' || obj[elem] < 0 || obj[elem] > 100) {
+              throw new Error(`Invalid percentage for ${elem} in ${type}: ${obj[elem]}`);
+            }
+          }
+        }
+      };
+      
+      validateRatios(ratios.current, 'current');
+      validateRatios(ratios.goal, 'goal');
+      validateRatios(ratios.colors, 'colors');
+      
+    } catch (parseError) {
+      console.error('Error parsing or validating JSON:', parseError.message);
+      throw new Error(`Invalid JSON format: ${parseError.message}`);
+    }
   } catch (err) {
-    res.status(500).json({ error: 'OpenAI Structured Response API error or JSON parsing error', details: err.message });
-    return;
+    console.error('OpenAI API error:', err.message);
+    if (err.name === 'TimeoutError') {
+      return handleApiError(err, res, { statusCode: 408 });
+    }
+    return handleApiError(err, res, { 
+      statusCode: 500, 
+      includeStack: process.env.NODE_ENV !== 'production'
+    });
   }
-  // Return both full analysis text and structured ratios
-  res.status(200).json({ analysis: analysisText, ratios });
+  // Return both full analysis text and structured ratios with additional metadata
+  res.status(200).json({ 
+    analysis: analysisText, 
+    ratios,
+    meta: {
+      timestamp: new Date().toISOString(),
+      processingTime: new Date().getTime() - new Date(req.headers['x-request-time'] || Date.now()).getTime(),
+      version: '2.0.0' // API version after security and performance enhancements
+    }
+  });
+} catch (error) {
+  // Handle any other errors that might have been missed
+  return handleApiError(error, res, { 
+    statusCode: error.statusCode || 500,
+    includeStack: process.env.NODE_ENV !== 'production'
+  });
 };
 // Configure Vercel function max execution duration (in seconds)
 module.exports.config = {

@@ -1,31 +1,104 @@
 // utils/compileHelper.js
 const vm = require('vm');
 
+// Enhanced security patterns to detect malicious code
+const SECURITY_PATTERNS = {
+  // Dangerous globals, methods and properties that could enable code breakout
+  DANGEROUS: /\b(process|global|constructor|prototype|__proto__|eval|Function|setTimeout\(\s*["']|new\s+Function|["']constructor["'])/,
+  // File system and process related operations
+  FILESYSTEM: /\b(require\s*\(\s*["'](?:fs|child_process|path|os|cluster))/,
+  // Network access (except safe fetch)
+  NETWORK: /\b(require\s*\(\s*["'](?:http|https|net|dgram))/,
+  // Uncommon syntax patterns that might indicate obfuscation
+  OBFUSCATION: /\\x[0-9a-f]{2}|\\u[0-9a-f]{4}|\\[0-7]{3}|;\s*\[.*\]\s*\(/
+};
+
 /**
+ * Enhanced helper compiler with improved security and validation
+ * 
  * Turn a string like "(dob) => new Date(dob).getFullYear()" into a real function,
- * sandboxed so it can *only* see Math, Date and whatever safe globals you expose.
- * Bad or “void” helpers never register; the try{} catch{} falls back silently.
+ * sandboxed so it can *only* see safe globals. Performs detailed validation and
+ * security checks before compiling.
+ * 
+ * @param {string} src - Source code string for the helper function
+ * @param {object} options - Compilation options
+ * @returns {Function} The compiled helper function
  */
-module.exports = function compileHelper(src = '') {
-  if (typeof src !== 'string' || src.length > 500 || src.includes('\n')) {
-    throw new Error('helper must be a 1-line string ≤500 chars');
+module.exports = function compileHelper(src = '', options = {}) {
+  const {
+    maxLength = 1000,     // Increased max length from 500 to allow more complex functions
+    timeout = 100,       // Increased timeout for compilation
+    allowMultiline = true, // Allow multiline functions for better readability
+    strictMode = false    // Option for extra strict security checks
+  } = options;
+  
+  // Basic input validation
+  if (typeof src !== 'string') {
+    throw new Error('Helper source must be a string');
+  }
+  
+  if (src.length > maxLength) {
+    throw new Error(`Helper source exceeds maximum length (${maxLength} chars)`);
+  }
+  
+  if (!allowMultiline && src.includes('\n')) {
+    throw new Error('Multiline helpers are not allowed in this context');
+  }
+  
+  // Security checks
+  for (const [type, pattern] of Object.entries(SECURITY_PATTERNS)) {
+    if (pattern.test(src)) {
+      throw new Error(`Security violation: Potentially unsafe code pattern detected (${type})`);
+    }
   }
 
   /* ─── Does it syntactically promise a value? ─────────────────────────
        a) arrow concise  (dob)=>dob+1
-       b) block with “return”  (x)=>{return x+1}
+       b) block with "return"  (x)=>{return x+1}
+       c) async functions with return
   -------------------------------------------------------------------- */
   const returnsValue =
-    /=>\s*[^({]/.test(src.trim()) ||         // arrow no braces
-    /return\s+/.test(src);                   // explicit return
-  if (!returnsValue) throw new Error('helper must return a value');
+    /=>\s*[^({]/.test(src.trim()) ||          // arrow no braces
+    /return\s+[^;]*/.test(src) ||             // explicit return with value
+    /async\s+.*return\s+/.test(src) ||        // async with return
+    /console\.log\s*\(/.test(src);            // logging is allowed without return for testing
+    
+  if (!returnsValue) {
+    throw new Error('Helper must explicitly return a value (use arrow function or return statement)');
+  }
 
-  const wrapped = `module.exports = (${src});`;
-  const ctx = vm.createContext({ module: { exports: {} }, exports: {} });
+  // Add strict mode to wrapper for better security
+  const wrapped = `"use strict"; module.exports = (${src});`;
+  
+  // Create isolated context
+  const ctx = vm.createContext({ 
+    module: { exports: {} }, 
+    exports: {},
+    console: { log: (...args) => console.log('[Helper]', ...args) } // Limited console access
+  });
 
-  new vm.Script(wrapped).runInContext(ctx, { timeout: 20 });
-  const fn = ctx.module.exports;
-  if (typeof fn !== 'function') throw new Error('helper is not a function');
-
-  return fn;
+  try {
+    // Compile and run with timeout protection
+    new vm.Script(wrapped, { filename: 'helper.js' }).runInContext(ctx, { timeout });
+    
+    const fn = ctx.module.exports;
+    
+    // Validate the compiled result
+    if (typeof fn !== 'function') {
+      throw new Error('Compilation did not result in a function');
+    }
+    
+    // Additional validation for function arity if needed
+    if (strictMode && fn.length === 0) {
+      throw new Error('Helper function must accept at least one parameter');
+    }
+    
+    return fn;
+  } catch (error) {
+    // Enhance error reporting
+    if (error instanceof SyntaxError) {
+      throw new Error(`Syntax error in helper: ${error.message}`);
+    }
+    throw error;  // Re-throw other errors
+  }
 };

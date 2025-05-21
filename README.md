@@ -770,6 +770,7 @@ curl -X POST [https://your-app.vercel.app/api/astro](https://your-app.vercel.app
 curl -X POST https://…/api/astro \
  -H 'Content-Type: application/json' \
  -d '{
+   ...,
    "helpers": {
      "ask": "(q)=> (async()=> (await (await fetch(\"[https://api.openai.com/v1/completions](https://api.openai.com/v1/completions)\",{method:\"POST\",headers:{Authorization:`Bearer ${process.env.OPENAI_KEY}`,\"Content-Type\":\"application/json\"},body:JSON.stringify({model:\"gpt-4o\",prompt:q,max_tokens:30})})).json()).choices[0].text.trim())()"
    },
@@ -786,15 +787,50 @@ curl -X POST https://…/api/astro \
 | Cause | What you’ll see | Why & remedy |
 |---|---|---|
 | function returns undefined | {{ myHelper(...) }} | helper forgot return. |
-| throws inside VM (syntax, timeout, fetch 401) | same literal | check server logs. |
-| expression >30 s runtime | literal | raise timeout in evalExpr. |
-All other cases now interpolate, including nested braces and async.
+| throws inside VM (syntax, timeout, fetch 401) | {{Error: message}} | detailed error message shown |
+| expression >30 s runtime | {{Error: timeout}} | execution timeout errors are now shown |
+| Nested expressions | {{Error: ...}} | nested expressions are not fully supported |
+
+All other cases now interpolate properly, including async operations with much improved error reporting.
 
 ---
 
-### Support for async calls
+## Template Engine and Sandbox Security Enhancements
+
+### Latest Security and Performance Improvements (May 2025)
+
+The JavaScript sandbox and template processing engine have been significantly enhanced with the following improvements:
+
+1. **Enhanced Security Measures**
+   - Restricted `require` functionality through allowlisting
+   - Added comprehensive security pattern detection
+   - Implemented prototype freezing and access restrictions
+   - Added input validation and sanitization
+   - Improved error handling with detailed reports
+
+2. **Performance Optimizations**
+   - Expression caching for frequently used templates
+   - Module caching via content hashing
+   - Streamlined context creation and reuse
+   - Improved string parsing algorithm
+
+3. **Robust Error Handling**
+   - Formatted error messages for debugging
+   - Detailed error reporting for syntax issues
+   - Timeout management for long-running operations
+   - Exception boundaries to prevent cascading failures
+
+4. **Enhanced Template Features**
+   - Better async/await support
+   - Improved string handling 
+   - Advanced depth tracking for nested templates
+   - Additional utility helpers for common operations
+
+### Support for Async Calls
  * Node vm can execute and return Promises; you must await them to get the value
- * Wrapping the user expression in (async()=>… )() is the simplest top-level-await shim
- * The VM timeout guards against runaway or stalled network calls
- * Vercel Functions allow outbound Workspace but count it toward execution time, so keeping the 10 s cap is sensible
-With these two code tweaks you can safely (and synchronously) embed any await fetch(...) logic inside {{ … }}.
+ * Wrapping the user expression in (async()=>… )() enables top-level await functionality
+ * VM timeout settings guard against runaway or stalled network calls
+ * Vercel Functions support outbound network requests within execution time limits
+ * The enhanced error handling provides better reporting for async failures
+
+With these improvements, you can now safely embed async operations including `fetch()` inside template expressions {{ … }} with proper error handling and timeouts.
