@@ -36,10 +36,18 @@ function buildBracelet(numBeads, goal, colors) {
   let diff = numBeads - total;
   if (diff > 0) {
     counts.sort((a, b) => b.rem - a.rem);
-    for (let i = 0; i < diff; i++) counts[i].count++;
+    // Use modulo to prevent out-of-bounds access when diff exceeds element count
+    for (let i = 0; i < diff; i++) {
+      const index = i % counts.length; // Safely wrap around if diff > counts.length
+      counts[index].count++;
+    }
   } else if (diff < 0) {
     counts.sort((a, b) => a.rem - b.rem);
-    for (let i = 0; i < -diff; i++) counts[i].count = Math.max(0, counts[i].count - 1);
+    // Use modulo to prevent out-of-bounds access
+    for (let i = 0; i < -diff; i++) {
+      const index = i % counts.length; // Safely wrap around if -diff > counts.length
+      counts[index].count = Math.max(0, counts[index].count - 1);
+    }
   }
   // Build list
   const beads = [];
@@ -52,22 +60,109 @@ function buildBracelet(numBeads, goal, colors) {
   return beads;
 }
 
+// Import from centralized utils
+const { ValidationError, handleApiError } = require('../utils');
+
 module.exports = (req, res) => {
-  if (req.method !== 'POST') {
-    res.status(405).json({ error: 'Method Not Allowed' });
-    return;
+  try {
+    // Method validation
+    if (req.method !== 'POST') {
+      throw new ValidationError('Method Not Allowed', { method: req.method });
+    }
+    
+    // Extract and validate request parameters
+    const { numBeads, ratios, seed } = req.body;
+    
+    if (!numBeads) {
+      throw new ValidationError('Missing numBeads parameter');
+    }
+    
+    if (typeof numBeads !== 'number' || numBeads <= 0 || numBeads > 100) {
+      throw new ValidationError('numBeads must be a positive number between 1 and 100');
+    }
+    
+    if (!ratios || !ratios.goal || !ratios.colors) {
+      throw new ValidationError('Missing ratios object with goal and colors properties');
+    }
+    
+    // Validate goal percentages
+    const elements = ['metal', 'wood', 'water', 'fire', 'earth'];
+    
+    // Validate individual elements
+    elements.forEach(element => {
+      if (typeof ratios.goal[element] !== 'number') {
+        throw new ValidationError(`Invalid goal percentage for ${element}`);
+      }
+      
+      // Add range validation to ensure percentages are between 0-100
+      const percentage = ratios.goal[element];
+      if (percentage < 0 || percentage > 100) {
+        throw new ValidationError(
+          `Invalid percentage value for ${element}: ${percentage}. Must be between 0 and 100.`,
+          {},
+          {
+            suggestion: `Please ensure all percentages are between 0 and 100. Current value for ${element}: ${percentage}`,
+            example: {
+              bad: `${element}: ${percentage}%`,
+              good: `${element}: ${percentage < 0 ? 0 : 100}%`
+            }
+          }
+        );
+      }
+    });
+    
+    // Validate that percentages sum to approximately 100%
+    const totalPct = elements.reduce((sum, element) => sum + ratios.goal[element], 0);
+    if (Math.abs(totalPct - 100) > 1) { // Allow for small floating point errors
+      throw new ValidationError(
+        `Sum of goal percentages must equal 100%, got ${totalPct.toFixed(2)}%`, 
+        {}, 
+        {
+          suggestion: `Please adjust your percentages so they sum to 100%. Current sum: ${totalPct.toFixed(2)}%`,
+          example: {
+            bad: `metal: 20%, wood: 25%, water: 20%, fire: 20%, earth: 20% (sum: 105%)`,
+            good: `metal: 20%, wood: 20%, water: 20%, fire: 20%, earth: 20% (sum: 100%)`
+          }
+        }
+      );
+    }
+    
+    // Validate colors format
+    elements.forEach(element => {
+      const color = ratios.colors[element];
+      if (!color || typeof color !== 'string' || !/^#[0-9A-Fa-f]{6}$/.test(color)) {
+        throw new ValidationError(`Invalid color format for ${element}. Must be a hex color like #FF0000`);
+      }
+    });
+    
+    // Parse seed if provided
+    let parsedSeed;
+    if (seed !== undefined) {
+      parsedSeed = parseInt(seed, 10);
+      if (isNaN(parsedSeed)) {
+        throw new ValidationError('Seed must be a valid number');
+      }
+    }
+    
+    // Build and shuffle
+    let beads = buildBracelet(numBeads, ratios.goal, ratios.colors);
+    const rng = parsedSeed !== undefined ? mulberry32(parsedSeed) : Math.random;
+    shuffle(beads, rng);
+    
+    // Return array of hex colors
+    res.status(200).json({ 
+      beads: beads.map(b => b.color),
+      meta: {
+        timestamp: new Date().toISOString(),
+        seed: parsedSeed !== undefined ? parsedSeed : 'random',
+        count: beads.length
+      }
+    });
+  } catch (error) {
+    return handleApiError(error, res, {
+      includeStack: process.env.NODE_ENV !== 'production'
+    });
   }
-  const { numBeads, ratios, seed } = req.body;
-  if (!numBeads || !ratios || !ratios.goal || !ratios.colors) {
-    res.status(400).json({ error: 'Missing required parameters' });
-    return;
-  }
-  // Build and shuffle
-  let beads = buildBracelet(numBeads, ratios.goal, ratios.colors);
-  const rng = seed != null ? mulberry32(parseInt(seed, 10)) : Math.random;
-  shuffle(beads, rng);
-  // Return array of hex colors
-  res.status(200).json({ beads: beads.map(b => b.color) });
 };
 
 // Extend function timeout if needed

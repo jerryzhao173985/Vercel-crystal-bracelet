@@ -770,6 +770,7 @@ curl -X POST [https://your-app.vercel.app/api/astro](https://your-app.vercel.app
 curl -X POST https://…/api/astro \
  -H 'Content-Type: application/json' \
  -d '{
+   ...,
    "helpers": {
      "ask": "(q)=> (async()=> (await (await fetch(\"[https://api.openai.com/v1/completions](https://api.openai.com/v1/completions)\",{method:\"POST\",headers:{Authorization:`Bearer ${process.env.OPENAI_KEY}`,\"Content-Type\":\"application/json\"},body:JSON.stringify({model:\"gpt-4o\",prompt:q,max_tokens:30})})).json()).choices[0].text.trim())()"
    },
@@ -786,15 +787,58 @@ curl -X POST https://…/api/astro \
 | Cause | What you’ll see | Why & remedy |
 |---|---|---|
 | function returns undefined | {{ myHelper(...) }} | helper forgot return. |
-| throws inside VM (syntax, timeout, fetch 401) | same literal | check server logs. |
-| expression >30 s runtime | literal | raise timeout in evalExpr. |
-All other cases now interpolate, including nested braces and async.
+| throws inside VM (syntax, timeout, fetch 401) | {{Error: message}} | detailed error message shown |
+| expression >30 s runtime | {{Error: timeout}} | execution timeout errors are now shown |
+| Nested expressions | {{Error: ...}} | nested expressions are not fully supported |
+
+All other cases now interpolate properly, including async operations with much improved error reporting.
 
 ---
 
-### Support for async calls
- * Node vm can execute and return Promises; you must await them to get the value
- * Wrapping the user expression in (async()=>… )() is the simplest top-level-await shim
- * The VM timeout guards against runaway or stalled network calls
- * Vercel Functions allow outbound Workspace but count it toward execution time, so keeping the 10 s cap is sensible
-With these two code tweaks you can safely (and synchronously) embed any await fetch(...) logic inside {{ … }}.
+## Template Engine and Sandbox Security Enhancements
+
+### Latest Security and Performance Improvements (May 2025)
+
+The JavaScript sandbox and template processing engine have been significantly enhanced with the following improvements:
+
+1. **Enhanced Security Measures**
+   - Restricted `require` functionality through allowlisting
+   - Added comprehensive security pattern detection
+   - Implemented prototype freezing and access restrictions
+   - Added input validation and sanitization
+   - Improved error handling with detailed reports
+   - Added WeakSet-based cycle detection for recursive objects
+   - Implemented proper sandboxing with VM context isolation
+
+2. **Performance Optimizations**
+   - LRU expression caching for frequently used templates
+   - Module caching via content hashing with size-limited random eviction
+   - Streamlined context creation and reuse
+   - Improved balanced-brace depth-parser for complex nested object/array literals
+   - Adaptive iteration limits based on template size
+
+3. **Robust Error Handling**
+   - Formatted error messages with examples for better debugging
+   - Detailed error reporting for syntax issues and security violations
+   - AbortController-based timeout management for async operations
+   - Exception boundaries with proper cleanup to prevent memory leaks
+   - Centralized error handling with stack trace capture
+
+4. **Enhanced Template Features**
+   - Full async/await support with proper Promise resolution
+   - Improved string handling and escaping
+   - Advanced depth tracking for nested templates
+   - Additional utility helpers for common operations
+   - Support for complex object literals and array expressions
+
+### Support for Async Operations in Templates
+* Node VM module can execute and return Promises, properly awaited for final values
+* Expressions are wrapped in async IIFEs (async()=>...)() to enable top-level await 
+* AbortController provides proper timeout control with resource cleanup
+* Double Promise resolution ensures proper handling of Promise-returning expressions
+* Vercel Functions support outbound network requests with extended timeouts (up to 60s)
+* Enhanced error handling with detailed reports for async failures
+
+For detailed documentation of all security enhancements, see [docs/patches/feature-sandbox-security-enhancements.md](docs/patches/feature-sandbox-security-enhancements.md)
+
+With these improvements, you can now safely embed async operations including `fetch()` inside template expressions {{ … }} with proper error handling, resource management, and timeouts.
