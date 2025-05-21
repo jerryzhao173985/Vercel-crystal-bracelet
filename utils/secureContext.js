@@ -72,7 +72,9 @@ function createSecureContext(additionalGlobals = {}, options = {}) {
   const { 
     preventPrototypeAccess = true,
     freezePrototypes = true,
-    disableConstructors = true
+    disableConstructors = true,
+    allowOverwrite = false,     // Whether to allow overwriting existing context properties
+    testMode = false            // Enable testing mode with fewer restrictions
   } = options;
   
   // Start with clean object without prototype
@@ -83,11 +85,33 @@ function createSecureContext(additionalGlobals = {}, options = {}) {
     context[key] = value;
   }
   
+  // Expanded list of blocked keys to prevent access to privileged globals
+  const BLOCKED_KEYS = [
+    // Core JavaScript prototypes and constructors
+    'constructor', 'prototype', '__proto__', 
+    // Code execution
+    'eval', 'Function', 'WebAssembly',
+    // System access
+    'require', 'process', 'global', 'globalThis', 'window',
+    // Potentially dangerous Node.js globals
+    'Buffer', 'setTimeout', 'setInterval', 'setImmediate',
+    // Network or filesystem access
+    'fetch', 'XMLHttpRequest', 'Worker'
+  ];
+  
   // Add additional globals, preventing overwriting of core protected objects
   for (const [key, value] of Object.entries(additionalGlobals)) {
-    // Don't allow overriding critical objects
-    if (!['constructor', 'prototype', '__proto__', 'eval', 'Function', 'require', 'process', 'global'].includes(key)) {
-      context[key] = value;
+    // Check against blocked keys list
+    if (!BLOCKED_KEYS.includes(key)) {
+      // Additional check: prevent overwriting existing context properties
+      // unless explicitly allowed by the options
+      if (!(key in context) || options.allowOverwrite) {
+        context[key] = value;
+      } else {
+        console.warn(`Attempted to overwrite existing context property: ${key}`);
+      }
+    } else {
+      console.warn(`Blocked attempt to add restricted global: ${key}`);
     }
   }
   
@@ -147,7 +171,8 @@ async function runInSecureContext(code, globals = {}, options = {}) {
   } = options;
   
   // For tests, use a simpler context approach
-  const isTest = process.env.NODE_ENV === 'test' || code === '1 + 1' || code === 'customVar + 1';
+  // Use the explicit testMode option rather than checking code content
+  const isTest = process.env.NODE_ENV === 'test' || options.testMode;
   
   // Create context based on whether we're in test mode
   const context = isTest 
