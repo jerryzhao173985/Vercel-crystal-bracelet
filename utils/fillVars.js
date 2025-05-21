@@ -88,8 +88,15 @@ async function evalExpr(expr, ctx, options = {}) {
     // Use the cached script
     const script = expressionCache.get(expr);
     
-    // Execute with timeout protection (30s)
-    let result = await script.runInContext(ctx, { timeout: 30_000 });
+    // Import withTimeout to properly handle timeout for the whole execution
+    const { withTimeout } = require('./errorHandler');
+    
+    // Execute with timeout protection using our withTimeout utility
+    // This ensures the entire execution is properly timed out, not just the sync part
+    let result = await withTimeout(
+      () => script.runInContext(ctx),
+      30_000
+    );
 
     // If result is a promise, we need to await it with an additional timeout protection
     if (result && typeof result.then === 'function') {

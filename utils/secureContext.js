@@ -184,8 +184,10 @@ async function runInSecureContext(code, globals = {}, options = {}) {
       // Create a timeout promise with proper cleanup
       const timeoutPromise = new Promise((_, reject) => {
         const id = setTimeout(() => {
+          // First abort the controller, which will trigger the cleanup listener
+          controller.abort(); 
+          // Then reject the promise
           reject(new Error(`Async execution timed out after ${timeout}ms`));
-          controller.abort(); // Signal abortion to any listeners
         }, timeout);
         
         // Ensure the timer is cleared if promise completes or errors
@@ -282,8 +284,8 @@ async function runSecureFunction(fn, args = [], options = {}) {
   // Create a timeout promise that properly cleans up when complete
   const timeoutPromise = new Promise((_, reject) => {
     const id = setTimeout(() => {
+      controller.abort(); // First abort to trigger cleanup
       reject(new Error(`Function execution timed out after ${timeout}ms`));
-      controller.abort(); // Signal abortion to any listeners
     }, timeout);
     
     // Auto-cleanup when abort is called

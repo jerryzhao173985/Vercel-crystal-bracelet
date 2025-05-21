@@ -26,7 +26,7 @@ function formatError(error, options = {}) {
   const response = {
     error: true,
     message: error.message || 'An unknown error occurred',
-    status: error.statusCode || statusCode,
+    statusCode: error.statusCode || statusCode,
     timestamp: new Date().toISOString()
   };
 
@@ -74,7 +74,7 @@ function handleApiError(error, res, options = {}) {
   }
 
   const formattedError = formatError(error, options);
-  res.status(formattedError.status).json(formattedError);
+  res.status(formattedError.statusCode).json(formattedError);
 }
 
 /**

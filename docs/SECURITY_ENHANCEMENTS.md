@@ -106,10 +106,12 @@ This document outlines the security and performance enhancements made to the Cry
 2. **Restricted require**
    ```javascript
    const safeRequire = (moduleName) => {
+     // Only allow modules that are side-effect free and don't provide access to filesystem or network
      const ALLOWLIST = [
-       'path', 'url', 'querystring', 'crypto', 
-       'zlib', 'buffer', 'util', 'stream'
+       'path', 'url', 'querystring', 'util', 'buffer'
      ];
+     // The following modules are excluded for security reasons:
+     // 'crypto', 'zlib', 'assert', 'events', 'http', 'https', 'stream'
      if (ALLOWLIST.includes(moduleName)) {
        return require(moduleName);
      }

@@ -7,7 +7,7 @@ This document addresses the review points for the JavaScript sandbox, parsing lo
 ### 1. Memory Management
 - **Fixed Timeout Handling**: Replaced manual timeout management with AbortController for proper cleanup
 - **Implemented LRU Cache Limits**: Added size limits and eviction policies for expression and module caches
-- **Enhanced Resource Cleanup**: Ensured all asynchronous operations properly clean up resources using signal-based pattern
+- **Enhanced Resource Cleanup**: Ensured all asynchronous operations thoroughly clean up resources using signal-based pattern
 - **Prevented Memory Leaks**: Added explicit cleanup in finally blocks and proper abort handling
 
 ### 2. Security Pattern Detection
